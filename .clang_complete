@@ -1,5 +1,6 @@
 -I.
 -I./include
+-I/home/lelanthran/include
 -Damq_version='"0.1.2"'
 -DBUILD_TIMESTAMP='"201909162104"'
 
