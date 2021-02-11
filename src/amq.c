@@ -183,14 +183,8 @@ bool amq_lib_init (void)
       goto errorexit;
    }
 
-   struct queue_t *errq = queue_new (AMQ_QUEUE_ERROR);
-   if (!errq) {
+   if (!(amq_message_queue_create (AMQ_QUEUE_ERROR)))
       goto errorexit;
-   }
-
-   if (!(amq_container_add (g_queue_container, AMQ_QUEUE_ERROR, errq))) {
-      goto errorexit;
-   }
 
    error = false;
 
@@ -223,6 +217,21 @@ void amq_lib_destroy (void)
 
    amq_container_del (g_worker_container, (void (*) (void *))worker_del);
    g_worker_container = NULL;
+}
+
+bool amq_message_queue_create (const char *name)
+{
+   struct queue_t *newq = queue_new (name);
+   if (!newq) {
+      return false;
+   }
+
+   if (!(amq_container_add (g_queue_container, name, newq))) {
+      queue_del (newq);
+      return false;
+   }
+
+   return true;
 }
 
 void amq_post (const char *queue_name, void *buf, size_t buf_len)

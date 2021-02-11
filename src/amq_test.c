@@ -13,7 +13,10 @@
 static enum amq_worker_result_t gen_event (void *cdata)
 {
    char *caller = cdata;
-   amq_post (AMQ_QUEUE_ERROR, caller, strlen (caller) + 1);
+
+   char *msg = NULL;
+   ds_str_printf (&msg, "[%i] %s", rand (), caller);
+   amq_post (TEST_MSGQ, msg, strlen (msg));
    sleep (1);
    return amq_worker_result_CONTINUE;
 }
@@ -23,7 +26,8 @@ static enum amq_worker_result_t handle_event (void *mesg, size_t mesg_len, void 
    const char *caller = cdata;
    const char *message = mesg;
 
-   AMQ_PRINT ("rxed event [%s:%zu] from [%s]\n", caller, mesg_len, message);
+   AMQ_PRINT ("Handling event [%s:%zu] from [%s]\n", caller, mesg_len, message);
+   free (message);
 
    return amq_worker_result_CONTINUE;
 }
@@ -33,6 +37,7 @@ static enum amq_worker_result_t error_logger (void *mesg, size_t mesg_len, void 
    const char *caller = cdata;
    const char *message = mesg;
 
+   // TODO: Specify the interface for the error-reporting messages.
    AMQ_PRINT ("Rxed error [%s:%zu] from [%s]\n", caller, mesg_len, message);
 
    return amq_worker_result_CONTINUE;
@@ -49,7 +54,13 @@ int main (void)
 
    amq_post (AMQ_QUEUE_ERROR, TEST_MSG, strlen (TEST_MSG));
 
+   if (!(amq_message_queue_create (TEST_MSGQ))) {
+      AMQ_PRINT ("Unable to create message queue [%s]\n", TEST_MSGQ);
+      goto errorexit;
+   }
+
    amq_consumer_create (AMQ_QUEUE_ERROR, "ErrorLogger", error_logger, "Created by " __FILE__);
+   amq_consumer_create (TEST_MSGQ, "HandleEvent", handle_event, "Created by " __FILE__);
    amq_producer_create ("GenEventWorker", gen_event, __func__);
 
    sleep (10);

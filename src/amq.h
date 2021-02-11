@@ -15,6 +15,21 @@
 // Signals that can be sent to workers. This is not the same as asynchronous signals from
 // `man signal`.
 #define AMQ_SIGNAL_TERMINATE        (1 << 0)
+#define AMQ_SIGNAL_RFU1             (1 << 1)
+#define AMQ_SIGNAL_RFU2             (1 << 2)
+#define AMQ_SIGNAL_RFU3             (1 << 3)
+#define AMQ_SIGNAL_RFU4             (1 << 4)
+#define AMQ_SIGNAL_RFU5             (1 << 5)
+#define AMQ_SIGNAL_RFU6             (1 << 6)
+#define AMQ_SIGNAL_RFU7             (1 << 7)
+#define AMQ_SIGNAL_RFU8             (1 << 8)
+#define AMQ_SIGNAL_RFU9             (1 << 9)
+#define AMQ_SIGNAL_RFU10            (1 << 10)
+#define AMQ_SIGNAL_RFU11            (1 << 11)
+#define AMQ_SIGNAL_RFU12            (1 << 12)
+#define AMQ_SIGNAL_RFU13            (1 << 13)
+#define AMQ_SIGNAL_RFU14            (1 << 14)
+#define AMQ_SIGNAL_RFU15            (1 << 15)
 
 // Post all errors to this queue.
 #define AMQ_QUEUE_ERROR    ("AMQ:ERROR")
@@ -51,6 +66,10 @@ extern "C" {
    // Once the calling application has called amq_lib_init(), the following functions
    // are available.
 
+   // Create a new message queue that workers can post to or consume. Returns true on
+   // success and false on error. Error messages will be posted to the AMQ_QUEUE_ERROR
+   // message queue.
+   bool amq_message_queue_create (const char *name);
 
    // Post a message to a message queue
    void amq_post (const char *queue_name, void *buf, size_t buf_len);
@@ -73,7 +92,11 @@ extern "C" {
                              const char *worker_name,
                              amq_consumer_func_t *worker_func, void *cdata);
 
+   // Send a signal (see #defines at the top of this file) to a worker.
    void amq_worker_signal (const char *worker_name, uint64_t signals);
+
+   // Wait for a worker to finish: this function will only return when a worker returns!
+   // If a worker never returns, then waiting for that worker will wait indefinitely.
    void amq_worker_wait (const char *worker_name);
 
 #ifdef __cplusplus
