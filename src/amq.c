@@ -8,6 +8,7 @@
 #include "cmq.h"
 
 #include "amq.h"
+#include "amq_container.h"
 
 /* ************************************************************
  * Private variables and functions
@@ -51,116 +52,8 @@ static struct queue_t *queue_new (const char *name)
  * The global queue container
  */
 
-ds_hmap_t *g_queue_container;  // struct queue_t *
-pthread_mutex_t g_queue_container_rlock;
-pthread_mutex_t g_queue_container_wlock;
-
-static void queue_container_destroy (void)
-{
-   pthread_mutex_lock (&g_queue_container_rlock);
-   pthread_mutex_lock (&g_queue_container_wlock);
-   if (g_queue_container) {
-      const char **names = NULL;
-      size_t *namelens = NULL;
-      if ((ds_hmap_keys (g_queue_container, (void ***)&names, &namelens))) {
-         for (size_t i=0; names && namelens && names[i] &&namelens[i]; i++) {
-            struct queue_t *queue = NULL;
-            if (!(ds_hmap_get (g_queue_container, names[i], namelens[i],
-                                                  (void **)&queue, NULL))) {
-               continue;
-            }
-            queue_del (queue);
-         }
-         free (names);
-         free (namelens);
-      }
-      ds_hmap_del (g_queue_container);
-   }
-
-   pthread_mutex_unlock (&g_queue_container_wlock);
-   pthread_mutex_unlock (&g_queue_container_rlock);
-   pthread_mutex_destroy (&g_queue_container_rlock);
-   pthread_mutex_destroy (&g_queue_container_wlock);
-}
-
-static bool queue_container_init (void)
-{
-   if (!(g_queue_container = ds_hmap_new (256))) {
-      return false;
-   }
-   pthread_mutex_init (&g_queue_container_rlock, NULL);
-   pthread_mutex_init (&g_queue_container_wlock, NULL);
-   return true;
-}
-
-static bool queue_container_add (const char *queue_name)
-{
-   void *exist_data = NULL;
-   size_t exist_datalen = 0;
-
-   pthread_mutex_lock (&g_queue_container_rlock);
-   pthread_mutex_lock (&g_queue_container_wlock);
-
-   // Check if this item exists - we don't allow duplicates and we
-   // don't want to overwrite any existing queue that exists with this
-   // name.
-   if ((ds_hmap_get (g_queue_container, queue_name, strlen (queue_name) + 1,
-                                         &exist_data, &exist_datalen))) {
-      pthread_mutex_unlock (&g_queue_container_wlock);
-      pthread_mutex_unlock (&g_queue_container_rlock);
-      return false;
-   }
-
-   struct queue_t *new_item = queue_new (queue_name);
-   if (!new_item)
-      return false;
-
-   if (!(ds_hmap_set (g_queue_container, queue_name, strlen (queue_name) + 1,
-                                         new_item, sizeof *new_item))) {
-      queue_del (new_item);
-      pthread_mutex_unlock (&g_queue_container_wlock);
-      pthread_mutex_unlock (&g_queue_container_rlock);
-      return false;
-   }
-
-   pthread_mutex_unlock (&g_queue_container_wlock);
-   pthread_mutex_unlock (&g_queue_container_rlock);
-   return true;
-}
-
-static void queue_container_del (const char *name)
-{
-   struct queue_t *queue = NULL;
-
-   pthread_mutex_lock (&g_queue_container_rlock);
-   pthread_mutex_lock (&g_queue_container_wlock);
-
-   if (!(ds_hmap_get (g_queue_container, name, strlen (name) + 1,
-                                         (void **)&queue, NULL))) {
-      pthread_mutex_unlock (&g_queue_container_wlock);
-      pthread_mutex_unlock (&g_queue_container_rlock);
-      return;
-   }
-
-   pthread_mutex_unlock (&g_queue_container_wlock);
-   pthread_mutex_unlock (&g_queue_container_rlock);
-   queue_del (queue);
-}
-
-static struct queue_t *queue_container_find (const char *name)
-{
-   struct queue_t *ret = NULL;
-   size_t namelen = strlen (name);
-
-   pthread_mutex_lock (&g_queue_container_rlock);
-   bool rc = ds_hmap_get (g_queue_container, name, namelen, (void **)&ret, NULL);
-   pthread_mutex_unlock (&g_queue_container_rlock);
-
-   if (!rc)
-      ret = NULL;
-
-   return ret;
-}
+amq_container_t *g_queue_container;
+amq_container_t *g_worker_container;
 
 /* ************************************************************
  * Public variables and functions
@@ -168,10 +61,15 @@ static struct queue_t *queue_container_find (const char *name)
 
 bool amq_lib_init (void)
 {
-   if (!(queue_container_init ())) {
+   if (!(g_queue_container = amq_container_new ())) {
       return false;
    }
-   if (!(queue_container_add (AMQ_QUEUE_ERROR))) {
+   struct queue_t *errq = queue_new (AMQ_QUEUE_ERROR);
+   if (!errq)
+      return false;
+
+   if (!(amq_container_add (g_queue_container, AMQ_QUEUE_ERROR, errq))) {
+      queue_del (errq);
       return false;
    }
    return true;
@@ -179,17 +77,35 @@ bool amq_lib_init (void)
 
 void amq_lib_destroy (void)
 {
-   queue_container_del (AMQ_QUEUE_ERROR);
-   queue_container_destroy ();
+   struct queue_t *errq = amq_container_remove (g_queue_container, AMQ_QUEUE_ERROR);
+   queue_del (errq);
+   amq_container_del (g_queue_container, (void (*) (void *))queue_del);
+   g_queue_container = NULL;
 }
-
 
 void amq_post (const char *queue_name, void *buf, size_t buf_len)
 {
-   struct queue_t *queue = queue_container_find (queue_name);
+   struct queue_t *queue = amq_container_find (g_queue_container, queue_name);
    if (!queue)
       return;
 
    // TODO: This really should go into a struct that we post.
    cmq_post (queue->cmq, buf, buf_len);
 }
+
+bool amq_producer_create (const char *worker_name,
+                          amq_producer_func_t *worker, void *cdata)
+{
+   bool error = true;
+
+   error = false;
+errorexit:
+   return !error;
+}
+
+bool amq_consumer_create (const char *supply_queue_name,
+                          const char *worker_name,
+                          amq_consumer_func_t *worker, void *cdata)
+{
+}
+

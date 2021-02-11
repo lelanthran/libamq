@@ -19,7 +19,9 @@ enum amq_worker_result_t {
    amq_worker_result_STOP,
 };
 
-typedef enum amq_worker_result_t (amq_worker_t) (void *);
+typedef enum amq_worker_result_t (amq_producer_func_t) (void *cdata);
+typedef enum amq_worker_result_t (amq_consumer_func_t) (void *mesg, size_t mesg_len,
+                                                        void *cdata);
 
 typedef struct amq_t amq_t;
 
@@ -44,7 +46,27 @@ extern "C" {
    // Once the calling application has called amq_lib_init(), the following functions
    // are available.
 
+
+   // Post a message to a message queue
    void amq_post (const char *queue_name, void *buf, size_t buf_len);
+
+   // Create a new producer thread, with an optional name. Name can be specified as NULL
+   // or an empty string. The cdata will be passed unchanged to the worker.
+   //
+   // Returns true if the producer was created, false otherwise. All errors are posted
+   // to the AMQ_QUEUE_ERROR message queue.
+   bool amq_producer_create (const char *worker_name,
+                             amq_producer_func_t *worker, void *cdata);
+
+   // Create a new consumer thread, with an optional name. Name can be specified as NULL
+   // or an empty string. The cdata will be passed unchanged to the worker. The worker
+   // will be passed messages from the queue supply_queue.
+   //
+   // Returns true if the consumer  was created, false otherwise. All errors are posted
+   // to the AMQ_QUEUE_ERROR message queue.
+   bool amq_consumer_create (const char *supply_queue_name,
+                             const char *worker_name,
+                             amq_consumer_func_t *worker, void *cdata);
 
 
 #ifdef __cplusplus
