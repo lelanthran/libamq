@@ -56,7 +56,7 @@ extern "C" {
    // Returns true if the producer was created, false otherwise. All errors are posted
    // to the AMQ_QUEUE_ERROR message queue.
    bool amq_producer_create (const char *worker_name,
-                             amq_producer_func_t *worker, void *cdata);
+                             amq_producer_func_t *worker_func, void *cdata);
 
    // Create a new consumer thread, with an optional name. Name can be specified as NULL
    // or an empty string. The cdata will be passed unchanged to the worker. The worker
@@ -66,7 +66,7 @@ extern "C" {
    // to the AMQ_QUEUE_ERROR message queue.
    bool amq_consumer_create (const char *supply_queue_name,
                              const char *worker_name,
-                             amq_consumer_func_t *worker, void *cdata);
+                             amq_consumer_func_t *worker_func, void *cdata);
 
 
 #ifdef __cplusplus

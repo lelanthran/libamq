@@ -23,8 +23,15 @@ amq_container_t *amq_container_new (void)
       free (ret);
       return NULL;
    }
-   pthread_mutex_init (&ret->rlock, NULL);
-   pthread_mutex_init (&ret->wlock, NULL);
+
+   pthread_mutexattr_t attr;
+
+   pthread_mutexattr_init (&attr);
+   pthread_mutexattr_settype (&attr, PTHREAD_MUTEX_RECURSIVE);
+   pthread_mutex_init (&ret->rlock, &attr);
+   pthread_mutex_init (&ret->wlock, &attr);
+   pthread_mutexattr_destroy (&attr);
+
    return ret;
 }
 
@@ -39,7 +46,7 @@ void amq_container_del (amq_container_t *container,  void (*item_del_fptr) (void
    const char **names = NULL;
    size_t *namelens = NULL;
    if ((ds_hmap_keys (container->map, (void ***)&names, &namelens))) {
-      for (size_t i=0; names && namelens && names[i] &&namelens[i]; i++) {
+      for (size_t i=0; names && namelens && names[i] && namelens[i]; i++) {
          void *item = NULL;
          if (!(ds_hmap_get (container->map, names[i], namelens[i],
                                             &item, NULL))) {
@@ -56,6 +63,8 @@ void amq_container_del (amq_container_t *container,  void (*item_del_fptr) (void
    pthread_mutex_unlock (&container->rlock);
    pthread_mutex_destroy (&container->rlock);
    pthread_mutex_destroy (&container->wlock);
+
+   free (container);
 }
 
 bool amq_container_add (amq_container_t *container,
