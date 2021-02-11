@@ -17,7 +17,11 @@ static enum amq_worker_result_t gen_event (void *cdata)
    char *msg = NULL;
    ds_str_printf (&msg, "[%i] %s", rand (), caller);
    amq_post (TEST_MSGQ, msg, strlen (msg));
-   sleep (1);
+
+   struct timespec tv = { 0, 100 * 1000000 };
+
+   nanosleep (&tv, NULL);
+
    return amq_worker_result_CONTINUE;
 }
 
@@ -27,7 +31,7 @@ static enum amq_worker_result_t handle_event (void *mesg, size_t mesg_len, void 
    const char *message = mesg;
 
    AMQ_PRINT ("Handling event [%s:%zu] from [%s]\n", caller, mesg_len, message);
-   free (message);
+   free (mesg);
 
    return amq_worker_result_CONTINUE;
 }
@@ -63,17 +67,20 @@ int main (void)
    amq_consumer_create (TEST_MSGQ, "HandleEvent", handle_event, "Created by " __FILE__);
    amq_producer_create ("GenEventWorker", gen_event, __func__);
 
-   sleep (10);
+   sleep (5);
 
    ret = EXIT_SUCCESS;
 
 errorexit:
 
-   sleep (1);
+   amq_worker_signal ("ErrorLogger", AMQ_SIGNAL_TERMINATE);
+   amq_worker_signal ("HandleEvent", AMQ_SIGNAL_TERMINATE);
+   amq_worker_signal ("GenEventWorker", AMQ_SIGNAL_TERMINATE);
+
+   amq_worker_wait ("ErrorLogger");
+   amq_worker_wait ("HandleEvent");
+   amq_worker_wait ("GenEventWorker");
 
    amq_lib_destroy ();
-
-   sleep (5);
-
    return ret;
 }
