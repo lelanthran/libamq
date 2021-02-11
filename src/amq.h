@@ -4,12 +4,17 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 // A utility macro to make logging easier.
 #define AMQ_PRINT(...)           do {\
    printf ("[%s:%i] ", __FILE__, __LINE__);\
    printf (__VA_ARGS__);\
 } while (0)
+
+// Signals that can be sent to workers. This is not the same as asynchronous signals from
+// `man signal`.
+#define AMQ_SIGNAL_TERMINATE        (1 << 0)
 
 // Post all errors to this queue.
 #define AMQ_QUEUE_ERROR    ("AMQ:ERROR")
@@ -68,6 +73,8 @@ extern "C" {
                              const char *worker_name,
                              amq_consumer_func_t *worker_func, void *cdata);
 
+   void amq_worker_signal (const char *worker_name, uint64_t signals);
+   void amq_worker_wait (const char *worker_name);
 
 #ifdef __cplusplus
 };

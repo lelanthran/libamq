@@ -124,13 +124,21 @@ void *amq_container_remove (amq_container_t *container, const char *name)
 void *amq_container_find (amq_container_t *container, const char *name)
 {
    void *ret = NULL;
-   size_t namelen = strlen (name);
+   size_t namelen = strlen (name) + 1;
 
    pthread_mutex_lock (&container->rlock);
-   bool rc = ds_hmap_get (container->map, name, namelen, ret, NULL);
+   bool rc = ds_hmap_get (container->map, name, namelen, &ret, NULL);
    pthread_mutex_unlock (&container->rlock);
 
-   return rc ? NULL : ret;
+   return rc ? ret : NULL;
 }
 
+size_t amq_container_names (amq_container_t *container, const char ***names)
+{
+   pthread_mutex_lock (&container->rlock);
+   size_t ret = ds_hmap_keys (container->map, (void ***)names, NULL);
+   pthread_mutex_unlock (&container->rlock);
+
+   return ret;
+}
 

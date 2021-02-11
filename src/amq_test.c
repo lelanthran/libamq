@@ -7,13 +7,13 @@
 #include "amq.h"
 #include "ds_str.h"
 
-#define STARTED_MSG        ("Application started\n")
+#define TEST_MSG           ("Test Message")
 #define TEST_MSGQ          ("APP:TEST_MSG_QUEUE")
 
 static enum amq_worker_result_t gen_event (void *cdata)
 {
    char *caller = cdata;
-   amq_post (TEST_MSGQ, caller, strlen (caller) + 1);
+   amq_post (AMQ_QUEUE_ERROR, caller, strlen (caller) + 1);
    sleep (1);
    return amq_worker_result_CONTINUE;
 }
@@ -47,17 +47,22 @@ int main (void)
       goto errorexit;
    }
 
-   amq_post (AMQ_QUEUE_ERROR, STARTED_MSG, strlen (STARTED_MSG));
+   amq_post (AMQ_QUEUE_ERROR, TEST_MSG, strlen (TEST_MSG));
 
-   amq_consumer_create (AMQ_QUEUE_ERROR, "ErrorLogger", error_logger, NULL);
+   amq_consumer_create (AMQ_QUEUE_ERROR, "ErrorLogger", error_logger, "Created by " __FILE__);
+   amq_producer_create ("GenEventWorker", gen_event, __func__);
 
-   sleep (5);
+   sleep (10);
 
    ret = EXIT_SUCCESS;
 
 errorexit:
 
+   sleep (1);
+
    amq_lib_destroy ();
+
+   sleep (5);
 
    return ret;
 }

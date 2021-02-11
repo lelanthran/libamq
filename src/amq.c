@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <inttypes.h>
 
 #include <pthread.h>
 
@@ -14,7 +15,6 @@
 /* ************************************************************
  * Private variables and functions
  */
-#define WORKER_FLAG_STOP         (1 << 0)
 
 /* ************************************************************
  * Queue objects, so we can keep track of queues
@@ -117,20 +117,30 @@ static struct worker_t *worker_new (const char *name, cmq_t *listen_queue, uint8
    return ret;
 }
 
+static void worker_signal (struct worker_t *worker, uint64_t signals)
+{
+   pthread_mutex_lock (&worker->lock);
+   worker->flags |= signals;
+   pthread_mutex_unlock (&worker->lock);
+   AMQ_PRINT ("Set STOP flag for worker [%s]\n", worker->worker_name);
+}
+
 static void *worker_run (void *worker)
 {
    struct worker_t *w = worker;
    enum amq_worker_result_t worker_result = amq_worker_result_CONTINUE;
    uint64_t flags = 0;
 
-   AMQ_PRINT ("Thread started\n");
-   while ((worker_result != amq_worker_result_STOP) && (~(flags & WORKER_FLAG_STOP))) {
+   AMQ_PRINT ("Thread started [%s]\n", w->worker_name);
+   while ((worker_result != amq_worker_result_STOP) && (~(flags & AMQ_SIGNAL_TERMINATE))) {
 
       worker_result = amq_worker_result_STOP;
 
       if ((pthread_mutex_trylock (&w->lock))==0) {
          flags = w->flags;
          pthread_mutex_unlock (&w->lock);
+         if ((flags & AMQ_SIGNAL_TERMINATE))
+            break;
       }
 
       if (w->worker_type == WORKER_PRODUCER) {
@@ -139,13 +149,14 @@ static void *worker_run (void *worker)
       if (w->worker_type == WORKER_CONSUMER) {
          void *mesg = NULL;
          size_t mesg_len = 0;
+         worker_result = amq_worker_result_CONTINUE;
          if (!(cmq_wait (w->listen_queue, &mesg, &mesg_len, 1000)))
             continue;
 
          worker_result = w->worker_func.consumer_func (mesg, mesg_len, w->worker_cdata);
       }
    }
-
+   AMQ_PRINT ("Ending thread [%s][%i:%" PRIx64 "]\n", w->worker_name, worker_result, flags);
    return NULL;
 }
 
@@ -192,6 +203,19 @@ errorexit:
 
 void amq_lib_destroy (void)
 {
+   const char **worker_names = NULL;
+
+   if ((amq_container_names (g_worker_container, &worker_names))!=0 && worker_names) {
+      for (size_t i=0; worker_names[i]; i++) {
+         amq_worker_signal (worker_names[i], AMQ_SIGNAL_TERMINATE);
+      }
+      for (size_t i=0; worker_names[i]; i++) {
+         amq_worker_wait (worker_names[i]);
+      }
+   }
+
+   free (worker_names);
+
    struct queue_t *errq = amq_container_remove (g_queue_container, AMQ_QUEUE_ERROR);
 
    amq_container_del (g_queue_container, (void (*) (void *))queue_del);
@@ -211,11 +235,11 @@ void amq_post (const char *queue_name, void *buf, size_t buf_len)
    cmq_post (queue->cmq, buf, buf_len);
 }
 
-bool amq_producer_create (const char *worker_name,
-                          amq_producer_func_t *worker_func, void *cdata)
+static bool worker_create (const char *worker_name, cmq_t *listen_queue, uint8_t type,
+                           void *worker_func, void *cdata)
 {
    bool error = true;
-   struct worker_t *worker = worker_new (worker_name, NULL, WORKER_PRODUCER,
+   struct worker_t *worker = worker_new (worker_name, listen_queue, type,
                                          worker_func, cdata);
 
    if (!worker)
@@ -243,9 +267,36 @@ errorexit:
    return !error;
 }
 
+bool amq_producer_create (const char *worker_name,
+                          amq_producer_func_t *worker_func, void *cdata)
+{
+   return worker_create (worker_name, NULL, WORKER_PRODUCER, worker_func, cdata);
+}
+
 bool amq_consumer_create (const char *supply_queue_name,
                           const char *worker_name,
-                          amq_consumer_func_t *worker, void *cdata)
+                          amq_consumer_func_t *worker_func, void *cdata)
 {
+   struct queue_t *queue = amq_container_find (g_queue_container, supply_queue_name);
+   cmq_t *supply_queue = queue->cmq;
+   return worker_create (worker_name, supply_queue, WORKER_CONSUMER, worker_func, cdata);
+}
+
+void amq_worker_signal (const char *worker_name, uint64_t signals)
+{
+   struct worker_t *worker = amq_container_find (g_worker_container, worker_name);
+   if (!worker)
+      return;
+
+   worker_signal (worker, signals);
+}
+
+void amq_worker_wait (const char *worker_name)
+{
+   struct worker_t *worker = amq_container_find (g_worker_container, worker_name);
+   if (!worker)
+      return;
+
+   pthread_join (worker->worker_id, NULL);
 }
 

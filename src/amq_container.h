@@ -21,6 +21,8 @@ extern "C" {
 
    void *amq_container_find (amq_container_t *container, const char *name);
 
+   size_t amq_container_names (amq_container_t *, const char ***names);
+
 #ifdef __cplusplus
 };
 #endif
