@@ -73,7 +73,7 @@ int main (void)
    }
 
    amq_consumer_create (AMQ_QUEUE_ERROR, "ErrorLogger", error_logger, "Created by " __FILE__);
-   amq_consumer_create (TEST_MSGQ, "HandleEvent", handle_event, "Created by " __FILE__);
+   amq_consumer_create (TEST_MSGQ, "", handle_event, "Created by " __FILE__);
    amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
 
    sleep (5);

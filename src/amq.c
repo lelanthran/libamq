@@ -307,17 +307,44 @@ void amq_post (const char *queue_name, void *buf, size_t buf_len)
    cmq_post (queue->cmq, buf, buf_len);
 }
 
+static char *gen_random_string (size_t nbytes)
+{
+   static int seed = 0;
+   if (!seed) {
+      seed = (int)time (NULL);
+      srand (seed);
+   }
+
+   char *ret = malloc ((nbytes * 2) + 1);
+   if (!ret)
+      return ds_str_dup ("");
+
+   for (size_t i=0; i<nbytes; i++) {
+      uint8_t r = rand () & 0xff;
+      snprintf (&ret[i*2], 3, "%02x", r);
+   }
+   return ret;
+}
+
 static bool worker_create (const char *worker_name, cmq_t *listen_queue, uint8_t type,
                            void *worker_func, void *cdata)
 {
    bool error = true;
-   struct worker_t *worker = worker_new (worker_name, listen_queue, type,
+   char *actual_name = NULL;
+
+   if (!worker_name || !worker_name[0]) {
+      actual_name = gen_random_string (8);
+   } else {
+      actual_name = ds_str_dup (worker_name);
+   }
+
+   struct worker_t *worker = worker_new (actual_name, listen_queue, type,
                                          worker_func, cdata);
 
    if (!worker)
       goto errorexit;
 
-   if (!(amq_container_add (g_worker_container, worker_name, worker))) {
+   if (!(amq_container_add (g_worker_container, actual_name, worker))) {
       // TODO: Post an error to the AMQ_QUEUE_ERROR queue
       AMQ_PRINT ("Failed to create thread: %m\n");
       goto errorexit;
@@ -333,9 +360,11 @@ static bool worker_create (const char *worker_name, cmq_t *listen_queue, uint8_t
 
 errorexit:
    if (error) {
-      amq_container_remove (g_worker_container, worker_name);
+      amq_container_remove (g_worker_container, actual_name);
       worker_del (worker);
    }
+   free (actual_name);
+
    return !error;
 }
 

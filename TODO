@@ -1,11 +1,4 @@
 ==============================================================
-Write a specification for the error handler.
-
-==============================================================
-Allow anonymous workers; when the name is empty or NULL, make up
-a random name for them.
-
-==============================================================
 Must replace rlock in containers with actual pthread_rwlock_t
 type so that allow multiple readers and only a single writer.
 
