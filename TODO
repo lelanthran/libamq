@@ -1,2 +1,23 @@
 ==============================================================
-Must figure out how I want the workers to attach to a queue.
+Workers need to receive information about themselves in a 'self'
+pointer.
+
+==============================================================
+Write a specification for the error handler.
+
+==============================================================
+Allow anonymous workers; when the name is empty or NULL, make up
+a random name for them.
+
+==============================================================
+Must replace rlock in containers with actual pthread_rwlock_t
+type so that allow multiple readers and only a single writer.
+
+==============================================================
+Define signals and behaviour for SUSPEND and RESUME for workers.
+A SUSPEND sent to a worker must cause the thread to not take
+any processor time until a RESUME is received. I think a SUSPEND
+implementation will basically have the worker_run() thread
+function sleep for a second (or more) between checking for a
+RESUME.
+
