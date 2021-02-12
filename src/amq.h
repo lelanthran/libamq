@@ -66,12 +66,20 @@ void amq_error_del (struct amq_error_t *errobj);
 };
 #endif
 
+struct amq_stats_t {
+   size_t   count;
+   float    min;
+   float    max;
+   float    average;
+   float    deviation;
+};
 
 struct amq_worker_t {
-   pthread_t   worker_id;
-   char       *worker_name;
-   void       *worker_cdata;
-   uint8_t     worker_type;
+   pthread_t             worker_id;
+   char                 *worker_name;
+   void                 *worker_cdata;
+   uint8_t               worker_type;
+   struct amq_stats_t    stats;
 };
 
 enum amq_worker_result_t {

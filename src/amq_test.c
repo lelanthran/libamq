@@ -11,6 +11,17 @@
 #define TEST_MSG           ("Test Message")
 #define TEST_MSGQ          ("APP:TEST_MSG_QUEUE")
 
+static void stats_dump (const struct amq_worker_t *w)
+{
+   printf ("[statistics:%s] count:%zu, min=%0.4f, max=%0.4f, avg=%0.4f, dev=%0.4f\n",
+            w->worker_name,
+            w->stats.count,
+            w->stats.min,
+            w->stats.max,
+            w->stats.average,
+            w->stats.deviation);
+}
+
 static enum amq_worker_result_t gen_event (const struct amq_worker_t *self,
                                            void *cdata)
 {
@@ -22,7 +33,7 @@ static enum amq_worker_result_t gen_event (const struct amq_worker_t *self,
 
    struct timespec tv = { 0, 100 * 1000000 };
 
-   nanosleep (&tv, NULL);
+   // nanosleep (&tv, NULL);
 
    return amq_worker_result_CONTINUE;
 }
@@ -36,6 +47,8 @@ static enum amq_worker_result_t handle_event (const struct amq_worker_t *self,
    AMQ_PRINT ("{%s} Handling event [%s:%zu] from [%s]\n", self->worker_name,
                                                           caller, mesg_len, message);
    free (mesg);
+
+   stats_dump (self);
 
    return amq_worker_result_CONTINUE;
 }
@@ -52,6 +65,7 @@ static enum amq_worker_result_t error_logger (const struct amq_worker_t *self,
                errobj->code, errobj->message, mesg_len, caller);
 
    amq_error_del (errobj);
+   stats_dump (self);
 
    return amq_worker_result_CONTINUE;
 }
@@ -74,6 +88,21 @@ int main (void)
 
    amq_consumer_create (AMQ_QUEUE_ERROR, "ErrorLogger", error_logger, "Created by " __FILE__);
    amq_consumer_create (TEST_MSGQ, "", handle_event, "Created by " __FILE__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
    amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
 
    sleep (5);

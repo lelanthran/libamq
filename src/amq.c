@@ -110,6 +110,39 @@ static struct queue_t *queue_new (const char *name)
 }
 
 /* ************************************************************
+ * Statistics object, to track performance of queues
+ */
+static void amq_stats_update (struct amq_stats_t *so, float newval)
+{
+   if (newval < so->min)
+      so->min = newval;
+
+   if (newval > so->max)
+      so->max = newval;
+
+   so->count++;
+
+   so->average = (so->average + newval) / so->count;
+
+   float tmp = newval - so->average;
+   if (tmp < 0)
+      tmp *= -1;
+
+   so->deviation = (so->deviation + tmp) / so->count;
+}
+
+static float timespec_conv (const struct timespec *ts)
+{
+   float ret = 0;
+   ret = ts->tv_sec * 1000000000;
+   ret += ts->tv_nsec;
+
+   ret = ret / 1000000;
+
+   return ret;
+}
+
+/* ************************************************************
  * Worker objects, so we can keep track of workers
  */
 
@@ -124,10 +157,11 @@ union worker_func_t {
 struct worker_t {
    // The following fields cannot be added to, removed from or swapped in order
    // as they are public to the caller.
-   pthread_t   worker_id;
-   char       *worker_name;
-   void       *worker_cdata;
-   uint8_t     worker_type;
+   pthread_t             worker_id;
+   char                 *worker_name;
+   void                 *worker_cdata;
+   uint8_t               worker_type;
+   struct amq_stats_t    stats;
 
    // These fields are private.
    cmq_t                *listen_queue;
@@ -177,6 +211,7 @@ static struct worker_t *worker_new (const char *name, cmq_t *listen_queue, uint8
       ret = NULL;
    }
 
+   ret->stats.min = 999999.9999;
    return ret;
 }
 
@@ -214,8 +249,12 @@ static void *worker_run (void *worker)
          void *mesg = NULL;
          size_t mesg_len = 0;
          worker_result = amq_worker_result_CONTINUE;
-         if (!(cmq_wait (w->listen_queue, &mesg, &mesg_len, 1000)))
+
+         struct timespec ts;
+         if (!(cmq_wait (w->listen_queue, &mesg, &mesg_len, 1000, &ts)))
             continue;
+
+         amq_stats_update (&w->stats, timespec_conv (&ts));
 
          worker_result = w->worker_func.consumer_func ((struct amq_worker_t *)w,
                                                         mesg, mesg_len, w->worker_cdata);
