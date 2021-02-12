@@ -1,4 +1,8 @@
 ==============================================================
+Must print out timing stats, after including the new cmq that
+collects the timing stats.
+
+==============================================================
 Must replace rlock in containers with actual pthread_rwlock_t
 type so that allow multiple readers and only a single writer.
 
