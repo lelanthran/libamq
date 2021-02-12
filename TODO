@@ -1,8 +1,4 @@
 ==============================================================
-Workers need to receive information about themselves in a 'self'
-pointer.
-
-==============================================================
 Write a specification for the error handler.
 
 ==============================================================

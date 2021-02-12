@@ -31,16 +31,58 @@
 #define AMQ_SIGNAL_RFU14            (1 << 14)
 #define AMQ_SIGNAL_RFU15            (1 << 15)
 
-// Post all errors to this queue.
+/* ************************************************
+ * All errors will be posted to AMQ_QUEUE_ERROR queue that is created on
+ * library initialisation. Errors are posted as a (struct amq_error_t *).
+ *
+ * The caller must have a consumer worker retrieve the error off the queue.
+ * If errors are not retrieved the queue will gradually fill up until it
+ * consumes all memory.
+ *
+ * More than one consumer can listen on the AMQ_QUEUE_ERROR queue. The consumer
+ * must free the error using amq_error_del(). Any worker may post to this queue
+ * using the wrapper function amq_error_new().
+ */
+#define AMQ_ERROR_POST(code,...)    {\
+   struct amq_error_t *errobj = amq_error_new (__FILE__, __LINE__, code, __VA_ARGS__);\
+   if (errobj) {\
+      amq_post (AMQ_QUEUE_ERROR, errobj, 0);\
+   } else {\
+      AMQ_PRINT ("Failed to create error object\n" __VA_ARGS__);\
+   }\
+} while (0)
+
 #define AMQ_QUEUE_ERROR    ("AMQ:ERROR")
+struct amq_error_t {
+   int   code;
+   char *message;
+};
+#ifdef __cplusplus
+extern "C" {
+#endif
+struct amq_error_t *amq_error_new (const char *file, int line, int code, ...);
+void amq_error_del (struct amq_error_t *errobj);
+#ifdef __cplusplus
+};
+#endif
+
+
+struct amq_worker_t {
+   pthread_t   worker_id;
+   char       *worker_name;
+   void       *worker_cdata;
+   uint8_t     worker_type;
+};
 
 enum amq_worker_result_t {
    amq_worker_result_CONTINUE,
    amq_worker_result_STOP,
 };
 
-typedef enum amq_worker_result_t (amq_producer_func_t) (void *cdata);
-typedef enum amq_worker_result_t (amq_consumer_func_t) (void *mesg, size_t mesg_len,
+typedef enum amq_worker_result_t (amq_producer_func_t) (const struct amq_worker_t *self,
+                                                        void *cdata);
+typedef enum amq_worker_result_t (amq_consumer_func_t) (const struct amq_worker_t *self,
+                                                        void *mesg, size_t mesg_len,
                                                         void *cdata);
 
 typedef struct amq_t amq_t;

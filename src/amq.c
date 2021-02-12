@@ -13,8 +13,68 @@
 #include "amq_container.h"
 
 /* ************************************************************
- * Private variables and functions
+ * Error objects, for the error queue
  */
+
+struct amq_error_t *amq_error_new (const char *file, int line, int code, ...)
+{
+   bool error = true;
+   char *prefix = NULL;
+   char *message = NULL;
+
+   struct amq_error_t *ret = calloc (1, sizeof *ret);
+
+   if (!ret) {
+      AMQ_PRINT ("Out of memory error: Failed to allocate memory for error object\n");
+      return NULL;
+   }
+   ret->code = code;
+
+   va_list ap;
+   va_start (ap, code);
+
+   const char *fmts = va_arg (ap, const char *);
+   if ((ds_str_vprintf (&message, fmts, ap))==0) {
+      AMQ_PRINT ("Out of memory error: Failed to allocate memory for error message\n");
+      goto errorexit;
+   }
+
+   if ((ds_str_printf (&prefix, "[%s:%i] [code:%i]", file, line, code))==0) {
+      AMQ_PRINT ("Out of memory error: Failed to allocate memory for error message\n");
+      goto errorexit;
+   }
+
+   if (!(ret->message = ds_str_cat (prefix, " ", message, NULL))) {
+      AMQ_PRINT ("Out of memory error: Failed to generate final message\n");
+      goto errorexit;
+   }
+
+   error = false;
+
+errorexit:
+
+   va_end (ap);
+
+   free (message);
+   free (prefix);
+
+   if (error) {
+      amq_error_del (ret);
+      ret = NULL;
+   }
+
+   return ret;
+}
+
+void amq_error_del (struct amq_error_t *errobj)
+{
+   if (errobj)
+      free (errobj->message);
+
+   free (errobj);
+}
+
+
 
 /* ************************************************************
  * Queue objects, so we can keep track of queues
@@ -62,15 +122,18 @@ union worker_func_t {
 };
 
 struct worker_t {
+   // The following fields cannot be added to, removed from or swapped in order
+   // as they are public to the caller.
    pthread_t   worker_id;
    char       *worker_name;
    void       *worker_cdata;
    uint8_t     worker_type;
-   union worker_func_t worker_func;
-   cmq_t      *listen_queue;
 
-   pthread_mutex_t lock;
-   uint64_t    flags;
+   // These fields are private.
+   cmq_t                *listen_queue;
+   union worker_func_t   worker_func;
+   pthread_mutex_t       flags_lock;
+   uint64_t              flags;
 };
 
 static void worker_del (struct worker_t *w)
@@ -96,7 +159,7 @@ static struct worker_t *worker_new (const char *name, cmq_t *listen_queue, uint8
    ret->listen_queue = listen_queue;
    ret->worker_type = type;
    ret->worker_cdata = cdata;
-   pthread_mutex_init (&ret->lock, &attr);
+   pthread_mutex_init (&ret->flags_lock, &attr);
    pthread_mutexattr_destroy (&attr);
 
    ret->worker_name = ds_str_dup (name);
@@ -119,9 +182,9 @@ static struct worker_t *worker_new (const char *name, cmq_t *listen_queue, uint8
 
 static void worker_signal (struct worker_t *worker, uint64_t signals)
 {
-   pthread_mutex_lock (&worker->lock);
+   pthread_mutex_lock (&worker->flags_lock);
    worker->flags |= signals;
-   pthread_mutex_unlock (&worker->lock);
+   pthread_mutex_unlock (&worker->flags_lock);
    AMQ_PRINT ("Set STOP flag for worker [%s]\n", worker->worker_name);
 }
 
@@ -136,15 +199,16 @@ static void *worker_run (void *worker)
 
       worker_result = amq_worker_result_STOP;
 
-      if ((pthread_mutex_trylock (&w->lock))==0) {
+      if ((pthread_mutex_trylock (&w->flags_lock))==0) {
          flags = w->flags;
-         pthread_mutex_unlock (&w->lock);
+         pthread_mutex_unlock (&w->flags_lock);
          if ((flags & AMQ_SIGNAL_TERMINATE))
             break;
       }
 
       if (w->worker_type == WORKER_PRODUCER) {
-         worker_result = w->worker_func.producer_func (w->worker_cdata);
+         worker_result = w->worker_func.producer_func ((struct amq_worker_t *)w,
+                                                        w->worker_cdata);
       }
       if (w->worker_type == WORKER_CONSUMER) {
          void *mesg = NULL;
@@ -153,7 +217,8 @@ static void *worker_run (void *worker)
          if (!(cmq_wait (w->listen_queue, &mesg, &mesg_len, 1000)))
             continue;
 
-         worker_result = w->worker_func.consumer_func (mesg, mesg_len, w->worker_cdata);
+         worker_result = w->worker_func.consumer_func ((struct amq_worker_t *)w,
+                                                        mesg, mesg_len, w->worker_cdata);
       }
    }
    AMQ_PRINT ("Ending thread [%s][%i:%" PRIx64 "]\n", w->worker_name, worker_result, flags);
@@ -209,8 +274,6 @@ void amq_lib_destroy (void)
    }
 
    free (worker_names);
-
-   struct queue_t *errq = amq_container_remove (g_queue_container, AMQ_QUEUE_ERROR);
 
    amq_container_del (g_queue_container, (void (*) (void *))queue_del);
    g_queue_container = NULL;
