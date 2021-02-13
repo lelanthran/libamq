@@ -89,8 +89,9 @@ int main (void)
 
    amq_consumer_create (AMQ_QUEUE_ERROR, "ErrorLogger", error_logger, "Created by " __FILE__);
    amq_consumer_create (TEST_MSGQ, "", handle_event, "Created by " __FILE__);
+   sleep (1);
    amq_producer_create ("GenEventWorker-0", gen_event, (void *)__func__);
-#if 0 // Used this when testing anonymous workers and queue performance
+#if 1 // Used this when testing anonymous workers and queue performance
    amq_producer_create ("GenEventWorker-1", gen_event, (void *)__func__);
    amq_producer_create ("GenEventWorker-2", gen_event, (void *)__func__);
    amq_producer_create ("GenEventWorker-3", gen_event, (void *)__func__);

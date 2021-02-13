@@ -2,11 +2,3 @@
 Msut remove workers from the worker container when worker_run()
 exits.
 
-==============================================================
-Define signals and behaviour for SUSPEND and RESUME for workers.
-A SUSPEND sent to a worker must cause the thread to not take
-any processor time until a RESUME is received. I think a SUSPEND
-implementation will basically have the worker_run() thread
-function sleep for a second (or more) between checking for a
-RESUME.
-

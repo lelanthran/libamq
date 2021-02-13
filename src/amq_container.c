@@ -4,6 +4,7 @@
 #include <pthread.h>
 
 #include "ds_hmap.h"
+#include "ds_str.h"
 #include "amq_container.h"
 
 struct amq_container_t {
@@ -46,9 +47,10 @@ void amq_container_del (amq_container_t *container,  void (*item_del_fptr) (void
          }
          item_del_fptr (item);
       }
-      free (names);
-      free (namelens);
    }
+   free (names);
+   free (namelens);
+
    ds_hmap_del (container->map);
 
    pthread_rwlock_unlock (&container->lock);
@@ -91,6 +93,9 @@ void *amq_container_remove (amq_container_t *container, const char *name)
 {
    void *ret = NULL;
 
+   if (!container)
+      return NULL;
+
    pthread_rwlock_wrlock (&container->lock);
 
    if (!(ds_hmap_get (container->map, name, strlen (name) + 1,
@@ -99,14 +104,18 @@ void *amq_container_remove (amq_container_t *container, const char *name)
       return NULL;
    }
 
+   ds_hmap_remove (container->map, name, strlen (name) + 1);
    pthread_rwlock_unlock (&container->lock);
    return ret;
 }
 
 void *amq_container_find (amq_container_t *container, const char *name)
 {
+   if (!container)
+      return NULL;
+
    void *ret = NULL;
-   size_t namelen = strlen (name) + 1;
+   size_t namelen = name ? strlen (name) + 1 : 0;
 
    pthread_rwlock_rdlock (&container->lock);
    bool rc = ds_hmap_get (container->map, name, namelen, &ret, NULL);
@@ -115,11 +124,45 @@ void *amq_container_find (amq_container_t *container, const char *name)
    return rc ? ret : NULL;
 }
 
-size_t amq_container_names (amq_container_t *container, const char ***names)
+size_t amq_container_names (amq_container_t *container, char ***names)
 {
+   if (!container)
+      return 0;
+
+   char **retvals = NULL;
+   char **tmp = NULL;
+   size_t ret = 0;
    pthread_rwlock_rdlock (&container->lock);
-   size_t ret = ds_hmap_keys (container->map, (void ***)names, NULL);
+   ret = ds_hmap_keys (container->map, (void ***)&retvals, NULL);
+   if (!ret) {
+      pthread_rwlock_unlock (&container->lock);
+      free (retvals);
+      *names = NULL;
+      return 0;
+   }
+   if (!(tmp = calloc (ret + 1, sizeof *tmp))) {
+      pthread_rwlock_unlock (&container->lock);
+      free (retvals);
+      return 0;
+   }
+   for (size_t i=0; i<ret; i++) {
+      printf ("[%zu] %p:%p [%s]\n", i, tmp, tmp[i], retvals[i]);
+      if (!(tmp[i] = ds_str_dup (retvals[i]))) {
+         pthread_rwlock_unlock (&container->lock);
+         free (retvals);
+         for (size_t j=0; tmp[j]; j++) {
+            free (tmp[j]);
+         }
+         free (tmp);
+         *names = NULL;
+         return 0;
+      }
+   }
+
    pthread_rwlock_unlock (&container->lock);
+
+   *names = tmp;
+   free (retvals);
 
    return ret;
 }

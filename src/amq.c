@@ -14,6 +14,16 @@
 #include "amq_container.h"
 
 /* ************************************************************
+ * The global queue container
+ */
+amq_container_t *g_queue_container;
+
+/* ************************************************************
+ * The global worker container
+ */
+amq_container_t *g_worker_container;
+
+/* ************************************************************
  * Error objects, for the error queue
  */
 
@@ -90,6 +100,7 @@ static void queue_del (struct queue_t *q)
    if (!q)
       return;
    free (q->name);
+   AMQ_PRINT ("Removing queue, discarding %zu messages\n", cmq_count (q->cmq));
    cmq_del (q->cmq);
    free (q);
 }
@@ -175,7 +186,11 @@ static void worker_del (struct worker_t *w)
 {
    if (!w)
       return;
+
+   amq_worker_sigset (w->worker_name, AMQ_SIGNAL_TERMINATE);
+   amq_worker_wait (w->worker_name);
    free (w->worker_name);
+   pthread_mutex_destroy (&w->flags_lock);
    memset (w, 0, sizeof *w);
    free (w);
 }
@@ -282,19 +297,13 @@ static void *worker_run (void *worker)
                                                         mesg, mesg_len, w->worker_cdata);
       }
    }
+
    AMQ_PRINT ("Ending thread [%s][%i:%" PRIx64 "]\n", w->worker_name, worker_result, flags);
+   amq_container_remove (g_worker_container, w->worker_name);
+   worker_del (w);
+
    return NULL;
 }
-
-/* ************************************************************
- * The global queue container
- */
-amq_container_t *g_queue_container;
-
-/* ************************************************************
- * The global worker container
- */
-amq_container_t *g_worker_container;
 
 /* ************************************************************
  * Public variables and functions
@@ -323,18 +332,20 @@ errorexit:
 
 void amq_lib_destroy (void)
 {
-   const char **worker_names = NULL;
+#if 0
+   char **worker_names = NULL;
 
    if ((amq_container_names (g_worker_container, &worker_names))!=0 && worker_names) {
       for (size_t i=0; worker_names[i]; i++) {
-         amq_worker_sigset (worker_names[i], AMQ_SIGNAL_TERMINATE);
+         struct worker_t *worker = amq_container_find (g_worker_container, worker_names[i]);
+         if (!worker)
+            continue;
+         worker_del (worker);
+         free (worker_names[i]);
       }
-      for (size_t i=0; worker_names[i]; i++) {
-         amq_worker_wait (worker_names[i]);
-      }
+      free (worker_names);
    }
-
-   free (worker_names);
+#endif
 
    amq_container_del (g_queue_container, (void (*) (void *))queue_del);
    g_queue_container = NULL;
