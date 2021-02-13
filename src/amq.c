@@ -100,7 +100,7 @@ static void queue_del (struct queue_t *q)
    if (!q)
       return;
    free (q->name);
-   AMQ_PRINT ("Removing queue, discarding %zu messages\n", cmq_count (q->cmq));
+   AMQ_PRINT ("Removing queue, discarding %i messages\n", cmq_count (q->cmq));
    cmq_del (q->cmq);
    free (q);
 }
@@ -299,7 +299,9 @@ static void *worker_run (void *worker)
    }
 
    AMQ_PRINT ("Ending thread [%s][%i:%" PRIx64 "]\n", w->worker_name, worker_result, flags);
-   amq_container_remove (g_worker_container, w->worker_name);
+   if (!(amq_container_remove (g_worker_container, w->worker_name))) {
+      AMQ_PRINT ("Could not remove [%s] from container - double-free()?\n", w->worker_name);
+   }
    worker_del (w);
 
    return NULL;
@@ -332,26 +334,25 @@ errorexit:
 
 void amq_lib_destroy (void)
 {
-#if 0
+#if 1
    char **worker_names = NULL;
 
    if ((amq_container_names (g_worker_container, &worker_names))!=0 && worker_names) {
       for (size_t i=0; worker_names[i]; i++) {
-         struct worker_t *worker = amq_container_find (g_worker_container, worker_names[i]);
-         if (!worker)
-            continue;
-         worker_del (worker);
+         amq_worker_sigset (worker_names[i], AMQ_SIGNAL_TERMINATE);
+         amq_worker_wait (worker_names[i]);
          free (worker_names[i]);
       }
       free (worker_names);
    }
 #endif
 
+   amq_container_del (g_worker_container, NULL);
+   g_worker_container = NULL;
+
    amq_container_del (g_queue_container, (void (*) (void *))queue_del);
    g_queue_container = NULL;
 
-   amq_container_del (g_worker_container, (void (*) (void *))worker_del);
-   g_worker_container = NULL;
 }
 
 bool amq_message_queue_create (const char *name)

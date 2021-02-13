@@ -36,20 +36,22 @@ void amq_container_del (amq_container_t *container,  void (*item_del_fptr) (void
 
    pthread_rwlock_wrlock (&container->lock);
 
-   const char **names = NULL;
-   size_t *namelens = NULL;
-   if ((ds_hmap_keys (container->map, (void ***)&names, &namelens))) {
-      for (size_t i=0; names && namelens && names[i] && namelens[i]; i++) {
-         void *item = NULL;
-         if (!(ds_hmap_get (container->map, names[i], namelens[i],
-                                            &item, NULL))) {
-            continue;
+   if (item_del_fptr) {
+      const char **names = NULL;
+      size_t *namelens = NULL;
+      if ((ds_hmap_keys (container->map, (void ***)&names, &namelens))) {
+         for (size_t i=0; names && namelens && names[i] && namelens[i]; i++) {
+            void *item = NULL;
+            if (!(ds_hmap_get (container->map, names[i], namelens[i],
+                                               &item, NULL))) {
+               continue;
+            }
+            item_del_fptr (item);
          }
-         item_del_fptr (item);
       }
+      free (names);
+      free (namelens);
    }
-   free (names);
-   free (namelens);
 
    ds_hmap_del (container->map);
 
@@ -146,7 +148,6 @@ size_t amq_container_names (amq_container_t *container, char ***names)
       return 0;
    }
    for (size_t i=0; i<ret; i++) {
-      printf ("[%zu] %p:%p [%s]\n", i, tmp, tmp[i], retvals[i]);
       if (!(tmp[i] = ds_str_dup (retvals[i]))) {
          pthread_rwlock_unlock (&container->lock);
          free (retvals);
