@@ -15,7 +15,7 @@
 // Signals that can be sent to workers. This is not the same as asynchronous signals from
 // `man signal`.
 #define AMQ_SIGNAL_TERMINATE        (1 << 0)
-#define AMQ_SIGNAL_RFU1             (1 << 1)
+#define AMQ_SIGNAL_SUSPEND          (1 << 1)
 #define AMQ_SIGNAL_RFU2             (1 << 2)
 #define AMQ_SIGNAL_RFU3             (1 << 3)
 #define AMQ_SIGNAL_RFU4             (1 << 4)
@@ -142,8 +142,13 @@ extern "C" {
                              const char *worker_name,
                              amq_consumer_func_t *worker_func, void *cdata);
 
-   // Send a signal (see #defines at the top of this file) to a worker.
-   void amq_worker_signal (const char *worker_name, uint64_t signals);
+   // Set and clear specific signals for a worker. See the #defines for values that
+   // can be bitwise-ORed into sigmask.
+   void amq_worker_sigset (const char *worker_name, uint64_t sigmask);
+   void amq_worker_sigclr (const char *worker_name, uint64_t sigmask);
+
+   // Get the current sigmask for a worker.
+   uint64_t amq_worker_sigget (const char *worker_name);
 
    // Wait for a worker to finish: this function will only return when a worker returns!
    // If a worker never returns, then waiting for that worker will wait indefinitely.

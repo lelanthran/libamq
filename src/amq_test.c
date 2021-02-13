@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+#include <inttypes.h>
 
 #include "amq.h"
 #include "ds_str.h"
@@ -89,6 +90,7 @@ int main (void)
    amq_consumer_create (AMQ_QUEUE_ERROR, "ErrorLogger", error_logger, "Created by " __FILE__);
    amq_consumer_create (TEST_MSGQ, "", handle_event, "Created by " __FILE__);
    amq_producer_create ("GenEventWorker-0", gen_event, (void *)__func__);
+#if 0 // Used this when testing anonymous workers and queue performance
    amq_producer_create ("GenEventWorker-1", gen_event, (void *)__func__);
    amq_producer_create ("GenEventWorker-2", gen_event, (void *)__func__);
    amq_producer_create ("GenEventWorker-3", gen_event, (void *)__func__);
@@ -106,14 +108,28 @@ int main (void)
    amq_producer_create (NULL, gen_event, (void *)__func__);
 
    sleep (5);
+#endif
+
+
+#if 1 // usaed to test the supension and resumption of workers.
+   sleep (1);
+   for (size_t i=0; i<4; i++) {
+      amq_worker_sigset ("GenEventWorker-0", AMQ_SIGNAL_SUSPEND);
+      AMQ_PRINT ("<%zu [0x%016" PRIu64 "]>\n", i, amq_worker_sigget ("GenEventWorker-0"));
+      sleep (2);
+      amq_worker_sigclr ("GenEventWorker-0", AMQ_SIGNAL_SUSPEND);
+      AMQ_PRINT ("</%zu [0x%016" PRIu64 "]>\n", i, amq_worker_sigget ("GenEventWorker-0"));
+      sleep (2);
+   }
+#endif
 
    ret = EXIT_SUCCESS;
 
 errorexit:
 
-   amq_worker_signal ("ErrorLogger", AMQ_SIGNAL_TERMINATE);
-   amq_worker_signal ("HandleEvent", AMQ_SIGNAL_TERMINATE);
-   amq_worker_signal ("GenEventWorker", AMQ_SIGNAL_TERMINATE);
+   amq_worker_sigset ("ErrorLogger", AMQ_SIGNAL_TERMINATE);
+   amq_worker_sigset ("HandleEvent", AMQ_SIGNAL_TERMINATE);
+   amq_worker_sigset ("GenEventWorker", AMQ_SIGNAL_TERMINATE);
 
    amq_worker_wait ("ErrorLogger");
    amq_worker_wait ("HandleEvent");

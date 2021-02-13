@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include <unistd.h>
 
 #include <pthread.h>
 
@@ -215,12 +216,29 @@ static struct worker_t *worker_new (const char *name, cmq_t *listen_queue, uint8
    return ret;
 }
 
-static void worker_signal (struct worker_t *worker, uint64_t signals)
+static void worker_sigset (struct worker_t *worker, uint64_t signals)
 {
+   // TODO: Could be faster using pthread_rwlock_t instead of a mutex.
    pthread_mutex_lock (&worker->flags_lock);
    worker->flags |= signals;
    pthread_mutex_unlock (&worker->flags_lock);
-   AMQ_PRINT ("Set STOP flag for worker [%s]\n", worker->worker_name);
+}
+
+static void worker_sigclr (struct worker_t *worker, uint64_t signals)
+{
+   // TODO: Could be faster using pthread_rwlock_t instead of a mutex.
+   pthread_mutex_lock (&worker->flags_lock);
+   worker->flags &= ~signals;
+   pthread_mutex_unlock (&worker->flags_lock);
+}
+
+static uint64_t worker_sigget (struct worker_t *worker)
+{
+   // TODO: Could be faster using pthread_rwlock_t instead of a mutex.
+   pthread_mutex_lock (&worker->flags_lock);
+   uint64_t ret = worker->flags;
+   pthread_mutex_unlock (&worker->flags_lock);
+   return ret;
 }
 
 static void *worker_run (void *worker)
@@ -230,16 +248,20 @@ static void *worker_run (void *worker)
    uint64_t flags = 0;
 
    AMQ_PRINT ("Thread started [%s]\n", w->worker_name);
-   while ((worker_result != amq_worker_result_STOP) && (~(flags & AMQ_SIGNAL_TERMINATE))) {
-
-      worker_result = amq_worker_result_STOP;
+   while ((worker_result != amq_worker_result_STOP)) {
 
       if ((pthread_mutex_trylock (&w->flags_lock))==0) {
          flags = w->flags;
          pthread_mutex_unlock (&w->flags_lock);
          if ((flags & AMQ_SIGNAL_TERMINATE))
             break;
+         if ((flags & AMQ_SIGNAL_SUSPEND)) {
+            sleep (1);
+            continue;
+         }
       }
+
+      worker_result = amq_worker_result_STOP;
 
       if (w->worker_type == WORKER_PRODUCER) {
          worker_result = w->worker_func.producer_func ((struct amq_worker_t *)w,
@@ -305,7 +327,7 @@ void amq_lib_destroy (void)
 
    if ((amq_container_names (g_worker_container, &worker_names))!=0 && worker_names) {
       for (size_t i=0; worker_names[i]; i++) {
-         amq_worker_signal (worker_names[i], AMQ_SIGNAL_TERMINATE);
+         amq_worker_sigset (worker_names[i], AMQ_SIGNAL_TERMINATE);
       }
       for (size_t i=0; worker_names[i]; i++) {
          amq_worker_wait (worker_names[i]);
@@ -422,13 +444,31 @@ bool amq_consumer_create (const char *supply_queue_name,
    return worker_create (worker_name, supply_queue, WORKER_CONSUMER, worker_func, cdata);
 }
 
-void amq_worker_signal (const char *worker_name, uint64_t signals)
+void amq_worker_sigset (const char *worker_name, uint64_t signals)
 {
    struct worker_t *worker = amq_container_find (g_worker_container, worker_name);
    if (!worker)
       return;
 
-   worker_signal (worker, signals);
+   worker_sigset (worker, signals);
+}
+
+void amq_worker_sigclr (const char *worker_name, uint64_t signals)
+{
+   struct worker_t *worker = amq_container_find (g_worker_container, worker_name);
+   if (!worker)
+      return;
+
+   worker_sigclr (worker, signals);
+}
+
+uint64_t amq_worker_sigget (const char *worker_name)
+{
+   struct worker_t *worker = amq_container_find (g_worker_container, worker_name);
+   if (!worker)
+      return 0;
+
+   return worker_sigget (worker);
 }
 
 void amq_worker_wait (const char *worker_name)
