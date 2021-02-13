@@ -33,7 +33,7 @@ static enum amq_worker_result_t gen_event (const struct amq_worker_t *self,
 
    struct timespec tv = { 0, 100 * 1000000 };
 
-   // nanosleep (&tv, NULL);
+   nanosleep (&tv, NULL);
 
    return amq_worker_result_CONTINUE;
 }
@@ -88,22 +88,22 @@ int main (void)
 
    amq_consumer_create (AMQ_QUEUE_ERROR, "ErrorLogger", error_logger, "Created by " __FILE__);
    amq_consumer_create (TEST_MSGQ, "", handle_event, "Created by " __FILE__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
-   amq_producer_create ("GenEventWorker", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker-0", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker-1", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker-2", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker-3", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker-4", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker-5", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker-6", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker-7", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker-8", gen_event, (void *)__func__);
+   amq_producer_create ("GenEventWorker-9", gen_event, (void *)__func__);
+   amq_producer_create ("", gen_event, (void *)__func__);
+   amq_producer_create ("", gen_event, (void *)__func__);
+   amq_producer_create ("", gen_event, (void *)__func__);
+   amq_producer_create (NULL, gen_event, (void *)__func__);
+   amq_producer_create (NULL, gen_event, (void *)__func__);
+   amq_producer_create (NULL, gen_event, (void *)__func__);
 
    sleep (5);
 

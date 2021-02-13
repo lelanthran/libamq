@@ -1,8 +1,4 @@
 ==============================================================
-Must replace rlock in containers with actual pthread_rwlock_t
-type so that allow multiple readers and only a single writer.
-
-==============================================================
 Define signals and behaviour for SUSPEND and RESUME for workers.
 A SUSPEND sent to a worker must cause the thread to not take
 any processor time until a RESUME is received. I think a SUSPEND

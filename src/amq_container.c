@@ -7,9 +7,8 @@
 #include "amq_container.h"
 
 struct amq_container_t {
-   ds_hmap_t *map;
-   pthread_mutex_t rlock;
-   pthread_mutex_t wlock;
+   ds_hmap_t         *map;
+   pthread_rwlock_t   lock;
 };
 
 
@@ -24,13 +23,7 @@ amq_container_t *amq_container_new (void)
       return NULL;
    }
 
-   pthread_mutexattr_t attr;
-
-   pthread_mutexattr_init (&attr);
-   pthread_mutexattr_settype (&attr, PTHREAD_MUTEX_RECURSIVE);
-   pthread_mutex_init (&ret->rlock, &attr);
-   pthread_mutex_init (&ret->wlock, &attr);
-   pthread_mutexattr_destroy (&attr);
+   pthread_rwlock_init (&ret->lock, NULL);
 
    return ret;
 }
@@ -40,8 +33,7 @@ void amq_container_del (amq_container_t *container,  void (*item_del_fptr) (void
    if (!container)
       return;
 
-   pthread_mutex_lock (&container->rlock);
-   pthread_mutex_lock (&container->wlock);
+   pthread_rwlock_wrlock (&container->lock);
 
    const char **names = NULL;
    size_t *namelens = NULL;
@@ -59,10 +51,8 @@ void amq_container_del (amq_container_t *container,  void (*item_del_fptr) (void
    }
    ds_hmap_del (container->map);
 
-   pthread_mutex_unlock (&container->wlock);
-   pthread_mutex_unlock (&container->rlock);
-   pthread_mutex_destroy (&container->rlock);
-   pthread_mutex_destroy (&container->wlock);
+   pthread_rwlock_unlock (&container->lock);
+   pthread_rwlock_destroy (&container->lock);
 
    free (container);
 }
@@ -76,29 +66,24 @@ bool amq_container_add (amq_container_t *container,
    void *exist_data = NULL;
    size_t exist_datalen = 0;
 
-   pthread_mutex_lock (&container->rlock);
-   pthread_mutex_lock (&container->wlock);
-
+   pthread_rwlock_wrlock (&container->lock);
 
    // Check if this item exists - we don't allow duplicates and we
    // don't want to overwrite any existing queue that exists with this
    // name.
    if ((ds_hmap_get (container->map, name, strlen (name) + 1,
                                      &exist_data, &exist_datalen))) {
-      pthread_mutex_unlock (&container->wlock);
-      pthread_mutex_unlock (&container->rlock);
+      pthread_rwlock_unlock (&container->lock);
       return false;
    }
 
    if (!(ds_hmap_set (container->map, name, strlen (name) + 1,
                                       element, 0))) {
-      pthread_mutex_unlock (&container->wlock);
-      pthread_mutex_unlock (&container->rlock);
+      pthread_rwlock_unlock (&container->lock);
       return false;
    }
 
-   pthread_mutex_unlock (&container->wlock);
-   pthread_mutex_unlock (&container->rlock);
+   pthread_rwlock_unlock (&container->lock);
    return true;
 }
 
@@ -106,18 +91,15 @@ void *amq_container_remove (amq_container_t *container, const char *name)
 {
    void *ret = NULL;
 
-   pthread_mutex_lock (&container->rlock);
-   pthread_mutex_lock (&container->wlock);
+   pthread_rwlock_wrlock (&container->lock);
 
    if (!(ds_hmap_get (container->map, name, strlen (name) + 1,
                                       &ret, NULL))) {
-      pthread_mutex_unlock (&container->wlock);
-      pthread_mutex_unlock (&container->rlock);
+      pthread_rwlock_unlock (&container->lock);
       return NULL;
    }
 
-   pthread_mutex_unlock (&container->wlock);
-   pthread_mutex_unlock (&container->rlock);
+   pthread_rwlock_unlock (&container->lock);
    return ret;
 }
 
@@ -126,18 +108,18 @@ void *amq_container_find (amq_container_t *container, const char *name)
    void *ret = NULL;
    size_t namelen = strlen (name) + 1;
 
-   pthread_mutex_lock (&container->rlock);
+   pthread_rwlock_rdlock (&container->lock);
    bool rc = ds_hmap_get (container->map, name, namelen, &ret, NULL);
-   pthread_mutex_unlock (&container->rlock);
+   pthread_rwlock_unlock (&container->lock);
 
    return rc ? ret : NULL;
 }
 
 size_t amq_container_names (amq_container_t *container, const char ***names)
 {
-   pthread_mutex_lock (&container->rlock);
+   pthread_rwlock_rdlock (&container->lock);
    size_t ret = ds_hmap_keys (container->map, (void ***)names, NULL);
-   pthread_mutex_unlock (&container->rlock);
+   pthread_rwlock_unlock (&container->lock);
 
    return ret;
 }
