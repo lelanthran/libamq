@@ -1,4 +1,0 @@
-==============================================================
-Msut remove workers from the worker container when worker_run()
-exits.
-

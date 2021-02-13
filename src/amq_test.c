@@ -7,10 +7,12 @@
 #include <inttypes.h>
 
 #include "amq.h"
+#include "amq_wgroup.h"
 #include "ds_str.h"
 
 #define TEST_MSG           ("Test Message")
 #define TEST_MSGQ          ("APP:TEST_MSG_QUEUE")
+#define TEST_GROUPNAME     ("TEST_GROUP")
 
 static void stats_dump (const struct amq_worker_t *w)
 {
@@ -74,9 +76,15 @@ static enum amq_worker_result_t error_logger (const struct amq_worker_t *self,
 int main (void)
 {
    int ret = EXIT_FAILURE;
+   amq_wgroup_t *group = NULL;
 
    if (!(amq_lib_init ())) {
       AMQ_PRINT ("Failed to initialise the Application Message Queue library\n");
+      goto errorexit;
+   }
+
+   if (!(group = amq_wgroup_new (TEST_GROUPNAME))) {
+      AMQ_PRINT ("Failed to create group [%s]\n", TEST_GROUPNAME);
       goto errorexit;
    }
 
@@ -108,6 +116,14 @@ int main (void)
    amq_producer_create (NULL, gen_event, (void *)__func__);
    amq_producer_create (NULL, gen_event, (void *)__func__);
 
+   if (!(amq_wgroup_add_worker (group, "GenEventWorker-1")) ||
+       !(amq_wgroup_add_worker (group, "GenEventWorker-2")) ||
+       !(amq_wgroup_add_worker (group, "GenEventWorker-3")) ||
+       !(amq_wgroup_add_worker (group, "GenEventWorker-4"))) {
+      AMQ_PRINT ("Failed to add workers to group\n");
+      goto errorexit;
+   }
+
    sleep (5);
 #endif
 
@@ -115,11 +131,13 @@ int main (void)
 #if 1 // usaed to test the supension and resumption of workers.
    sleep (1);
    for (size_t i=0; i<4; i++) {
-      amq_worker_sigset ("GenEventWorker-0", AMQ_SIGNAL_SUSPEND);
-      AMQ_PRINT ("<%zu [0x%016" PRIu64 "]>\n", i, amq_worker_sigget ("GenEventWorker-0"));
+      amq_wgroup_sigset (group, AMQ_SIGNAL_SUSPEND);
+      AMQ_PRINT ("<suspended %zu: %s %016" PRIu64 "]>\n",
+                  i, amq_wgroup_name (group), amq_worker_sigget ("GenEventWorker-3"));
       sleep (2);
-      amq_worker_sigclr ("GenEventWorker-0", AMQ_SIGNAL_SUSPEND);
-      AMQ_PRINT ("</%zu [0x%016" PRIu64 "]>\n", i, amq_worker_sigget ("GenEventWorker-0"));
+      amq_wgroup_sigclr (group, AMQ_SIGNAL_SUSPEND);
+      AMQ_PRINT ("</unsuspended %zu: %s %016" PRIu64 "]>\n",
+                  i, amq_wgroup_name (group), amq_worker_sigget ("GenEventWorker-4"));
       sleep (2);
    }
 #endif
@@ -135,6 +153,8 @@ errorexit:
    amq_worker_wait ("ErrorLogger");
    amq_worker_wait ("HandleEvent");
    amq_worker_wait ("GenEventWorker");
+
+   amq_wgroup_del (group);
 
    amq_lib_destroy ();
    return ret;
