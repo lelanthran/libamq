@@ -87,6 +87,10 @@ enum amq_worker_result_t output_writer (const struct amq_worker_t *self,
                                         void *mesg, size_t mesg_len,
                                         void *cdata)
 {
+   static const char *paddles = "-\\|/";
+   static const size_t npaddles = 4;
+   static paddles_index = 0;
+
    struct folder_stats_entry_t *fentry = mesg;
    FILE *fout = cdata;
 
@@ -94,6 +98,7 @@ enum amq_worker_result_t output_writer (const struct amq_worker_t *self,
    (void)mesg_len;
 
    // printf ("\r%s                                  ", folder_stats_entry_name (fentry));
+   printf ("\r   %c", paddles[paddles_index++ % npaddles]);
    folder_stats_entry_write (fentry, fout);
    folder_stats_entry_del (fentry);
 
@@ -109,9 +114,15 @@ enum amq_worker_result_t wfpath_open (const struct amq_worker_t *self,
    (void)mesg_len;
    (void)cdata;
 
+   if (!pathname) {
+      AMQ_ERROR_POST (-2, "NULL pathname received, ignoring\n");
+      return amq_worker_result_CONTINUE;
+   }
+
    folder_stats_entry_t *entry = folder_stats_entry_new (pathname);
    if (!entry) {
-      AMQ_ERROR_POST (-1, "Out of memory error?\n");
+      free (pathname);
+      return amq_worker_result_CONTINUE;
    }
 
    amq_post (Q_OUTPUT, entry, 0);

@@ -83,7 +83,6 @@ static void post_direntries (const char *dirname)
 errorexit:
    if (dirp)
       closedir (dirp);
-
 }
 
 folder_stats_entry_t *folder_stats_entry_new (const char *name)

@@ -36,7 +36,7 @@ struct amq_error_t *amq_error_new (const char *file, int line, int code, ...)
    struct amq_error_t *ret = calloc (1, sizeof *ret);
 
    if (!ret) {
-      AMQ_PRINT ("Out of memory error: Failed to allocate memory for error object\n");
+      AMQ_ERROR_POST (-1, "Out of memory error: Failed to allocate memory for error object\n");
       return NULL;
    }
    ret->code = code;
@@ -46,17 +46,17 @@ struct amq_error_t *amq_error_new (const char *file, int line, int code, ...)
 
    const char *fmts = va_arg (ap, const char *);
    if ((ds_str_vprintf (&message, fmts, ap))==0) {
-      AMQ_PRINT ("Out of memory error: Failed to allocate memory for error message\n");
+      AMQ_ERROR_POST (-1, "Out of memory error: Failed to allocate memory for error message\n");
       goto errorexit;
    }
 
    if ((ds_str_printf (&prefix, "[%s:%i] [code:%i]", file, line, code))==0) {
-      AMQ_PRINT ("Out of memory error: Failed to allocate memory for error message\n");
+      AMQ_ERROR_POST (-1, "Out of memory error: Failed to allocate memory for error message\n");
       goto errorexit;
    }
 
    if (!(ret->message = ds_str_cat (prefix, " ", message, NULL))) {
-      AMQ_PRINT ("Out of memory error: Failed to generate final message\n");
+      AMQ_ERROR_POST (-1, "Out of memory error: Failed to generate final message\n");
       goto errorexit;
    }
 
@@ -100,7 +100,10 @@ static void queue_del (struct queue_t *q)
    if (!q)
       return;
    free (q->name);
-   AMQ_PRINT ("Removing queue, discarding %i messages\n", cmq_count (q->cmq));
+   int nmessages = cmq_count (q->cmq);
+   if (nmessages) {
+      AMQ_ERROR_POST (-1, "Removing queue, discarding %i messages\n", nmessages);
+   }
    cmq_del (q->cmq);
    free (q);
 }
@@ -262,7 +265,6 @@ static void *worker_run (void *worker)
    enum amq_worker_result_t worker_result = amq_worker_result_CONTINUE;
    uint64_t flags = 0;
 
-   AMQ_PRINT ("Thread started [%s]\n", w->worker_name);
    while ((worker_result != amq_worker_result_STOP)) {
 
       if ((pthread_mutex_trylock (&w->flags_lock))==0) {
@@ -298,9 +300,8 @@ static void *worker_run (void *worker)
       }
    }
 
-   AMQ_PRINT ("Ending thread [%s][%i:%" PRIx64 "]\n", w->worker_name, worker_result, flags);
    if (!(amq_container_remove (g_worker_container, w->worker_name))) {
-      AMQ_PRINT ("Could not remove [%s] from container - double-free()?\n", w->worker_name);
+      AMQ_ERROR_POST (-1, "Could not remove [%s] from container - double-free()?\n", w->worker_name);
    }
    worker_del (w);
 
@@ -435,13 +436,13 @@ static bool worker_create (const char *worker_name, cmq_t *listen_queue, uint8_t
 
    if (!(amq_container_add (g_worker_container, actual_name, worker))) {
       // TODO: Post an error to the AMQ_QUEUE_ERROR queue
-      AMQ_PRINT ("Failed to create thread: %m\n");
+      AMQ_ERROR_POST (-1, "Failed to create thread: %m\n");
       goto errorexit;
    }
 
    if ((pthread_create (&worker->worker_id, NULL, worker_run, worker))!=0) {
       // TODO: Post an error to the AMQ_QUEUE_ERROR queue
-      AMQ_PRINT ("Failed to create thread: %m\n");
+      AMQ_ERROR_POST (-1, "Failed to create thread: %m\n");
       goto errorexit;
    }
 
