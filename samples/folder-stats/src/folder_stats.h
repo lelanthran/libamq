@@ -22,6 +22,7 @@ extern "C" {
    void folder_stats_entry_del (folder_stats_entry_t *fs);
 
    bool folder_stats_entry_write (folder_stats_entry_t *fs, FILE *fout);
+   const char *folder_stats_entry_name (folder_stats_entry_t *fs);
 
 
 #ifdef __cplusplus

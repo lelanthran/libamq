@@ -307,6 +307,29 @@ static void *worker_run (void *worker)
    return NULL;
 }
 
+
+/* ************************************************************
+ * Internal utility functions.
+ */
+static char *gen_random_string (size_t nbytes)
+{
+   static int seed = 0;
+   if (!seed) {
+      seed = (int)time (NULL);
+      srand (seed);
+   }
+
+   char *ret = malloc ((nbytes * 2) + 1);
+   if (!ret)
+      return ds_str_dup ("");
+
+   for (size_t i=0; i<nbytes; i++) {
+      uint8_t r = rand () & 0xff;
+      snprintf (&ret[i*2], 3, "%02x", r);
+   }
+   return ret;
+}
+
 /* ************************************************************
  * Public variables and functions
  */
@@ -376,27 +399,20 @@ void amq_post (const char *queue_name, void *buf, size_t buf_len)
    if (!queue)
       return;
 
-   // TODO: This really should go into a struct that we post.
    cmq_post (queue->cmq, buf, buf_len);
 }
 
-static char *gen_random_string (size_t nbytes)
+size_t amq_count (const char *queue_name)
 {
-   static int seed = 0;
-   if (!seed) {
-      seed = (int)time (NULL);
-      srand (seed);
-   }
+   struct queue_t *queue = amq_container_find (g_queue_container, queue_name);
+   if (!queue)
+      return 0;
 
-   char *ret = malloc ((nbytes * 2) + 1);
-   if (!ret)
-      return ds_str_dup ("");
+   int actual = cmq_count (queue->cmq);
+   if (actual < 0)
+      return 0;
 
-   for (size_t i=0; i<nbytes; i++) {
-      uint8_t r = rand () & 0xff;
-      snprintf (&ret[i*2], 3, "%02x", r);
-   }
-   return ret;
+   return actual;
 }
 
 static bool worker_create (const char *worker_name, cmq_t *listen_queue, uint8_t type,

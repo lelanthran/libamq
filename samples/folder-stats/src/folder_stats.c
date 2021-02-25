@@ -31,7 +31,19 @@ static char *lstrdup (const char *src)
 
 static char *lstrcat (const char *s1, const char *s2, const char *s3)
 {
-   return NULL;
+   size_t s1_len = strlen (s1);
+   size_t s2_len = strlen (s2);
+   size_t s3_len = strlen (s3);
+
+   char *ret = malloc (s1_len + s2_len + s3_len + 1);
+   if (!ret) {
+      return NULL;
+   }
+
+   memcpy (ret, s1, s1_len);
+   memcpy (&ret[s1_len], s2, s2_len);
+   memcpy (&ret[s1_len + s2_len], s3, s3_len + 1);
+   return ret;
 }
 
 
@@ -159,5 +171,9 @@ bool folder_stats_entry_write (folder_stats_entry_t *fs, FILE *fout)
    return true;
 }
 
+const char *folder_stats_entry_name (folder_stats_entry_t *fs)
+{
+   return fs ? fs->f_name : "Invalid object";
+}
 
 

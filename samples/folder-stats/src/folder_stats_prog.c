@@ -93,6 +93,7 @@ enum amq_worker_result_t output_writer (const struct amq_worker_t *self,
    (void)self;
    (void)mesg_len;
 
+   // printf ("\r%s                                  ", folder_stats_entry_name (fentry));
    folder_stats_entry_write (fentry, fout);
    folder_stats_entry_del (fentry);
 
@@ -104,14 +105,16 @@ enum amq_worker_result_t wfpath_open (const struct amq_worker_t *self,
                                       void *cdata)
 {
    char *pathname = mesg;
-   FILE *outfile = cdata;
+   (void)self;
+   (void)mesg_len;
+   (void)cdata;
 
    folder_stats_entry_t *entry = folder_stats_entry_new (pathname);
    if (!entry) {
       AMQ_ERROR_POST (-1, "Out of memory error?\n");
    }
 
-   folder_stats_entry_del (entry);
+   amq_post (Q_OUTPUT, entry, 0);
    free (pathname);
 
    return amq_worker_result_CONTINUE;
@@ -142,6 +145,25 @@ int main (int argc, char **argv)
       goto errorexit;
    }
 
+   // This could run a long time on large filesystems, the user must be able to
+   // abort at any time.
+   signal (SIGINT, sigh);
+
+   // The output file, if specified, otherwise we use the default .csv filename.
+   // If the user specified --stdout we ignore the specified filename and use
+   // NULL which causes the worker to send the output to stdout.
+   if (out_fname && !(getenv ("--stdout"))) {
+      if (!(outfile = fopen (out_fname, "wt"))) {
+         printf ("Failed to open [%s] for writing: %m\n", out_fname);
+         goto errorexit;
+      }
+   }
+   fprintf (outfile, "%s,%s,%s,%s,%s\n", "Name",
+                                         "Extension",
+                                         "Size",
+                                         "Type",
+                                         "Modified");
+
    // A queue just to write the output to a file
    if (!(amq_message_queue_create (Q_OUTPUT))) {
       printf ("Failed to create output queue\n");
@@ -161,7 +183,7 @@ int main (int argc, char **argv)
    }
 
    // A consumer of the results-output queue
-   if (!(amq_consumer_create (Q_OUTPUT, W_OUTPUT, errhandler, NULL))) {
+   if (!(amq_consumer_create (Q_OUTPUT, W_OUTPUT, output_writer, outfile))) {
       printf ("Failed to create worker to handle errors\n");
       goto errorexit;
    }
@@ -170,22 +192,8 @@ int main (int argc, char **argv)
    for (size_t i=0; i<12; i++) {
       char snum[25];
       snprintf (snum, sizeof snum, "%s-%zu", W_PATHNAMES, i);
-      if (!(amq_consumer_create (Q_PATHNAMES, snum, wfpath_open, outfile))) {
+      if (!(amq_consumer_create (Q_PATHNAMES, snum, wfpath_open, NULL))) {
          printf ("Failed to create worker to handle errors\n");
-         goto errorexit;
-      }
-   }
-
-   // This could run a long time on large filesystems, the user must be able to
-   // abort at any time.
-   signal (SIGINT, sigh);
-
-   // The output file, if specified, otherwise we use the default .csv filename.
-   // If the user specified --stdout we ignore the specified filename and use
-   // NULL which causes the worker to send the output to stdout.
-   if (out_fname && !(getenv ("--stdout"))) {
-      if (!(outfile = fopen (out_fname, "wt"))) {
-         printf ("Failed to open [%s] for writing: %m\n", out_fname);
          goto errorexit;
       }
    }
@@ -194,8 +202,19 @@ int main (int argc, char **argv)
 
    AMQ_ERROR_POST (0, "Successfully initialised");
 
-   while (g_endflag == 0)
+   size_t retries = 0;
+   while (g_endflag == 0) {
+      if ((amq_count (Q_PATHNAMES))==0) {
+         retries++;
+      } else {
+         retries = 0;
+      }
+      if (retries >= 5) {
+         printf ("\nNo new folders specified in the last five seconds, ending...\n");
+         g_endflag = 1;
+      }
       sleep (1);
+   }
 
    ret = EXIT_SUCCESS;
 
