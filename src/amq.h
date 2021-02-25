@@ -124,6 +124,9 @@ extern "C" {
    // Post a message to a message queue
    void amq_post (const char *queue_name, void *buf, size_t buf_len);
 
+   // Returns the number of elements in the specified queue.
+   size_t amq_count (const char *queue_name);
+
    // Create a new producer thread, with an optional name. Name can be specified as NULL
    // or an empty string. The cdata will be passed unchanged to the worker.
    //

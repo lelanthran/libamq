@@ -89,7 +89,7 @@ enum amq_worker_result_t output_writer (const struct amq_worker_t *self,
 {
    static const char *paddles = "-\\|/";
    static const size_t npaddles = 4;
-   static paddles_index = 0;
+   static int paddles_index = 0;
 
    struct folder_stats_entry_t *fentry = mesg;
    FILE *fout = cdata;
@@ -220,11 +220,12 @@ int main (int argc, char **argv)
       } else {
          retries = 0;
       }
-      if (retries >= 5) {
-         printf ("\nNo new folders specified in the last five seconds, ending...\n");
+      if (retries > 2) {
+         printf ("\nNo new folders specified in the two seconds, ending...\n");
          g_endflag = 1;
+      } else {
+         sleep (1);
       }
-      sleep (1);
    }
 
    ret = EXIT_SUCCESS;

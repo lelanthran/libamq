@@ -8,7 +8,7 @@
 
 struct amq_wgroup_t {
    char *name;
-   void **workers;
+   ds_array_t *workers;
 };
 
 void amq_wgroup_del (amq_wgroup_t *group)
@@ -60,7 +60,7 @@ bool amq_wgroup_add_worker (amq_wgroup_t *group, const char *worker_name)
    if (!tmp)
       return false;
 
-   if (!(ds_array_ins_tail (&group->workers, tmp))) {
+   if (!(ds_array_ins_tail (group->workers, tmp))) {
       free (tmp);
       return false;
    }
@@ -76,7 +76,7 @@ bool amq_wgroup_remove_worker (amq_wgroup_t *group, const char *worker_name)
       char *worker = ds_array_index (group->workers, i);
       if ((strcmp (worker, worker_name))==0) {
          free (worker);
-         ds_array_remove (&group->workers, i);
+         ds_array_remove (group->workers, i);
          return true;
       }
    }
