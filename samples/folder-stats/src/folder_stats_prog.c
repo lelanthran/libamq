@@ -25,8 +25,10 @@ static void process_cline (int argc, char **argv)
    (void)argc;
    size_t i=1;
    while (argv[i]) {
-      if ((memcmp (argv[i], "--", 2))!=0)
+      if ((memcmp (argv[i], "--", 2))!=0) {
+         i++;
          continue;
+      }
       char *name = argv[i];
       char *value = strchr (name, '=');
       if (value) {
@@ -41,8 +43,13 @@ static void process_cline (int argc, char **argv)
 }
 
 static const char *g_help_msg[] = {
-   "Usage: folder_stats [options]",
-   NULL,
+"Usage: folder_stats [options]",
+"",
+"--output-file=<filename>  Specify the file to store the output in (defaults to fstat.csv)",
+"--scan-path=<path>        Specify the path to start the examination (defaults to .)",
+"",
+"",
+NULL,
 };
 
 static void print_long_msg (const char **msg)
@@ -146,7 +153,7 @@ int main (int argc, char **argv)
    }
 
    const char *out_fname = getenv ("--output-file") ? getenv ("--output-file") : "fstats.csv";
-   const char *scan_path = getenv ("--scan-path") ? getenv ("--scan-path") : "./";
+   const char *scan_path = getenv ("--scan-path") ? getenv ("--scan-path") : ".";
 
    printf ("Writing output to [%s]\n", out_fname);
    printf ("Scanning from folder [%s]\n", scan_path);

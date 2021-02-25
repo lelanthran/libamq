@@ -1,13 +1,13 @@
-v1.0.1 - ???
+# v1.0.1 - ???
 BUGFIXES
 1. Deadlock-avoidance fix from libcmq added.
 
 FEATURES
-2. Added a smaple application to get file-sizes recursively.
+1. Added a sample application to get file-sizes recursively.
 
 MISC
 
 
-v1.0.0 - Sat 13 Feb 2021 22:59:01 SAST
+# v1.0.0 - Sat 13 Feb 2021 22:59:01 SAST
 
 Initial usable release.
