@@ -200,7 +200,7 @@ int main (int argc, char **argv)
    }
 
    // Multiple consumers for the path interrogation queue
-   for (size_t i=0; i<12; i++) {
+   for (size_t i=0; i<6; i++) {
       char snum[25];
       snprintf (snum, sizeof snum, "%s-%zu", W_PATHNAMES, i);
       if (!(amq_consumer_create (Q_PATHNAMES, snum, wfpath_open, NULL))) {
