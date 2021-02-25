@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#include <pthread.h>
+
 // A utility macro to make logging easier.
 #define AMQ_PRINT(...)           do {\
    printf ("[%s:%i] ", __FILE__, __LINE__);\

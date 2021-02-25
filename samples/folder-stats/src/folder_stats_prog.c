@@ -9,6 +9,28 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "folder_stats.h"
+#include "amq.h"
+
+#ifdef PLATFORM_Windows
+static int setenv (const char *name, const char *value, int overwrite)
+{
+   size_t name_len = strlen (name);
+   size_t value_len = strlen (value);
+   char *nvstr = malloc (name_len + value_len + 1);
+   if (!nvstr)
+      return -1;
+
+   (void)overwrite;
+
+   strcpy (nvstr, name);
+   strcat (nvstr, "=");
+   strcat (nvstr, value);
+
+   return putenv (nvstr);
+}
+#endif
+
 static char *lstrdup (const char *src)
 {
    char *ret = malloc (strlen (src) + 1);
@@ -16,9 +38,6 @@ static char *lstrdup (const char *src)
       strcpy (ret, src);
    return ret;
 }
-
-#include "folder_stats.h"
-#include "amq.h"
 
 static void process_cline (int argc, char **argv)
 {

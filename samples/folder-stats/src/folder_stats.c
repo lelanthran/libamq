@@ -126,13 +126,20 @@ folder_stats_entry_t *folder_stats_entry_new (const char *name)
    if ((S_ISFIFO (statbuf.st_mode)))
       ret->f_type = '|';
 
+#ifdef PLATFORM_POSIX
    if ((S_ISLNK (statbuf.st_mode)))
       ret->f_type = 'l';
 
    if ((S_ISSOCK (statbuf.st_mode)))
       ret->f_type = 's';
+#endif
 
+#ifdef PLATFORM_POSIX
    ret->f_mtime = statbuf.st_mtim.tv_sec;
+#endif
+#ifdef PLATFORM_WINDOWS
+   ret->f_mtime = statbuf.st_mtime.tv_sec;
+#endif
 
    if ((S_ISDIR (statbuf.st_mode))) {
       post_direntries (name);
