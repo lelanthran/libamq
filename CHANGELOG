@@ -1,7 +1,9 @@
 v1.0.1 - ???
 BUGFIXES
+1. Deadlock-avoidance fix from libcmq added.
 
 FEATURES
+2. Added a smaple application to get file-sizes recursively.
 
 MISC
 
