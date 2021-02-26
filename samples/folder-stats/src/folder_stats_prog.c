@@ -11,10 +11,14 @@
 
 #include "folder_stats.h"
 #include "amq.h"
+#include "amq_wgroup.h"
 
 #ifdef PLATFORM_Windows
 static int setenv (const char *name, const char *value, int overwrite)
 {
+   if (!value || !*value) {
+      value = "1";
+   }
    size_t name_len = strlen (name);
    size_t value_len = strlen (value);
    char *nvstr = malloc (name_len + value_len + 1);
@@ -113,10 +117,6 @@ enum amq_worker_result_t output_writer (const struct amq_worker_t *self,
                                         void *mesg, size_t mesg_len,
                                         void *cdata)
 {
-   static const char *paddles = "-\\|/";
-   static const size_t npaddles = 4;
-   static int paddles_index = 0;
-
    struct folder_stats_entry_t *fentry = mesg;
    FILE *fout = cdata;
 
@@ -124,7 +124,7 @@ enum amq_worker_result_t output_writer (const struct amq_worker_t *self,
    (void)mesg_len;
 
    // printf ("\r%s                                  ", folder_stats_entry_name (fentry));
-   printf ("\r   %c", paddles[paddles_index++ % npaddles]);
+   // printf ("                   %c [%zu]\r",
    folder_stats_entry_write (fentry, fout);
    folder_stats_entry_del (fentry);
 
@@ -239,20 +239,28 @@ int main (int argc, char **argv)
 
    AMQ_ERROR_POST (0, "Successfully initialised");
 
-   size_t retries = 0;
-   while (g_endflag == 0) {
-      if ((amq_count (Q_PATHNAMES))==0) {
-         retries++;
-      } else {
-         retries = 0;
+   sleep (1);
+
+   size_t pathnames_remaining = amq_count (Q_PATHNAMES);
+   size_t output_remaining = amq_count (Q_OUTPUT);
+
+   printf ("\nCurrent queue status ... [file-queue:%zu] [messages:%zu]\n",
+            pathnames_remaining, output_remaining);
+   do {
+      static const char *paddles = "-\\|/";
+      static const size_t npaddles = 4;
+      static int paddles_index = 0;
+
+      printf ("\rWaiting for queues to empty ... [file-queue:%zu] [messages:%zu]      %c       ",
+               pathnames_remaining, output_remaining,
+               paddles[paddles_index++ % npaddles]);
+      pathnames_remaining = amq_count (Q_PATHNAMES);
+      output_remaining = amq_count (Q_OUTPUT);
+      if (g_endflag) {
+         printf ("\nUser requested shutdown, forcing stop now\n");
+         break;
       }
-      if (retries > 2) {
-         printf ("\nNo new folders specified in the two seconds, ending...\n");
-         g_endflag = 1;
-      } else {
-         sleep (1);
-      }
-   }
+   } while (pathnames_remaining || output_remaining);
 
    ret = EXIT_SUCCESS;
 

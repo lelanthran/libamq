@@ -1,0 +1,4 @@
+==============================================
+Bug on windows: on folder_stats exit the queues
+still have messages according to the count. This
+should not be possibleA.

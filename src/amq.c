@@ -2,6 +2,8 @@
 #include <string.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include <time.h>
+
 #include <unistd.h>
 
 #include <pthread.h>
