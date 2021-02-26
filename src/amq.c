@@ -102,7 +102,7 @@ static void queue_del (struct queue_t *q)
    free (q->name);
    int nmessages = cmq_count (q->cmq);
    if (nmessages) {
-      AMQ_ERROR_POST (-1, "Removing queue, discarding %i messages\n", nmessages);
+      fprintf (stderr, "Removing queue, discarding %i messages\n", nmessages);
    }
    cmq_del (q->cmq);
    free (q);
