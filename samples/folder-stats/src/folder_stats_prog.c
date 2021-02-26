@@ -244,23 +244,30 @@ int main (int argc, char **argv)
    size_t pathnames_remaining = amq_count (Q_PATHNAMES);
    size_t output_remaining = amq_count (Q_OUTPUT);
 
-   printf ("\nCurrent queue status ... [file-queue:%zu] [messages:%zu]\n",
+       printf ("\n     Current file queues ........... [unexamined : recorded]  [%zu : %zu]\n",
             pathnames_remaining, output_remaining);
    do {
       static const char *paddles = "-\\|/";
       static const size_t npaddles = 4;
       static int paddles_index = 0;
 
-      printf ("\rWaiting for queues to empty ... [file-queue:%zu] [messages:%zu]      %c       ",
-               pathnames_remaining, output_remaining,
-               paddles[paddles_index++ % npaddles]);
+      printf ("\r [%c] Waiting for queues to empty ... [unexamined : recorded]  [%zu : %zu]",
+               paddles[paddles_index++ % npaddles],
+               pathnames_remaining, output_remaining);
       pathnames_remaining = amq_count (Q_PATHNAMES);
       output_remaining = amq_count (Q_OUTPUT);
       if (g_endflag) {
-         printf ("\nUser requested shutdown, forcing stop now\n");
+         printf ("\n *** User requested shutdown, forcing stop now ***\n");
+         amq_worker_sigset (W_OUTPUT, AMQ_SIGNAL_TERMINATE);
          break;
       }
    } while (pathnames_remaining || output_remaining);
+
+       printf ("\n     Current file queues ........... [unexamined : recorded]  [%zu : %zu]\n",
+            pathnames_remaining, output_remaining);
+
+   amq_worker_sigset (W_OUTPUT, AMQ_SIGNAL_TERMINATE);
+   sleep (1);
 
    ret = EXIT_SUCCESS;
 
