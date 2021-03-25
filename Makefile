@@ -40,9 +40,25 @@ MAKEPROGRAM_EXE=$(findstring exe,$(MAKE))
 MAKEPROGRAM_MINGW=$(findstring mingw,$(MAKE))
 GITSHELL=$(findstring Git,$(SHELL))
 GITSHELL+=$(findstring git,$(SHELL))
+MINGW_DETECTED=$(findstring mingw,$(GCC))
+BUILD_HOST=$(findstring Linux,$(shell uname -s))
+
 
 # TODO: Remember that freebsd might use not gmake/gnu-make; must add in
 # some diagnostics so that user gets a message to install gnu make.
+
+ifneq ($(MINGW_DETECTED),)
+ifeq ($(strip $(BUILD_HOST)),Linux)
+	HOME=$(subst \,/,$(HOMEDRIVE)$(HOMEPATH))
+	PLATFORM:=Windows
+	EXE_EXT:=.exe
+	LIB_EXT:=.dll
+	PLATFORM_LDFLAGS:=-L$(HOME)/lib -lmingw32 -lmsvcrt -lgcc -liphlpapi -lws2_32
+	PLATFORM_CFLAGS:= -D__USE_MINGW_ANSI_STDIO -DWINVER=0x0600 -D_WIN32_WINNT=0x0600
+	ECHO:=echo
+endif
+endif
+
 
 ifneq ($(MAKEPROGRAM_EXE),)
 ifeq ($(strip $(GITSHELL)),)
@@ -76,7 +92,7 @@ ifeq ($(PLATFORM),)
 	PLATFORM:=POSIX
 	EXE_EXT:=.elf
 	LIB_EXT:=.so
-	PLATFORM_LDFLAGS:= -lpthread -ldl
+	PLATFORM_LDFLAGS:= -ldl
 	ECHO:=echo
 	REAL_SHOW:=real-show
 endif
@@ -125,6 +141,9 @@ STCLNK_TARGET:=lib$(PROJNAME)-$(VERSION).a
 DYNLNK_NAME:=$(OUTLIB)/lib$(PROJNAME)$(LIB_EXT)
 STCLNK_NAME:=$(OUTLIB)/lib$(PROJNAME).a
 
+ifneq ($(SWIG_WRAPPERS),)
+	SWIG_OBJECTS:=swig_$(PROJNAME)
+endif
 
 # ######################################################################
 # Declare the intermediate outputs
@@ -137,13 +156,13 @@ BIN_CPPOBS:=\
 BINOBS:=$(BIN_COBS) $(BIN_CPPOBS)
 
 COBS:=\
-	$(foreach fname,$(LIBRARY_OBJECT_CSOURCEFILES),$(OUTOBS)/$(fname).o)
+	$(foreach fname,$(LIBRARY_OBJECT_CSOURCEFILES) $(SWIG_OBJECTS),$(OUTOBS)/$(fname).o)
 
 CPPOBS:=\
 	$(foreach fname,$(LIBRARY_OBJECT_CPPSOURCEFILES),$(OUTOBS)/$(fname).o)
 
-OBS:=$(COBS) $(CPPOBS)
-ALL_OBS:=$(OBS) $(BINOBS)
+OBS=$(COBS) $(CPPOBS)
+ALL_OBS=$(OBS) $(BINOBS)
 DEPS:=\
 	$(subst $(OUTOBS),src,$(subst .o,.d,$(ALL_OBS)))
 
@@ -168,6 +187,21 @@ ifndef LD_LIB
 endif
 
 # ######################################################################
+# On android targets we must remove the -lpthread from the link flags
+#
+ifneq (,$(findstring android,$(LD_PROG)))
+REAL_EXTRA_LIB_LDFLAGS=$(subst -lpthread,,$(EXTRA_LIB_LDFLAGS))
+else
+REAL_EXTRA_LIB_LDFLAGS=$(EXTRA_LIB_LDFLAGS)
+endif
+
+ifneq (,$(findstring android,$(LD_LIB)))
+REAL_EXTRA_PROG_LDFLAGS=$(subst -lpthread,,$(EXTRA_PROG_LDFLAGS))
+else
+REAL_EXTRA_PROG_LDFLAGS=$(EXTRA_PROG_LDFLAGS)
+endif
+
+# ######################################################################
 # Declare all the flags we need to compile and link
 BUILD_TIMESTAMP:=$(shell date +"%Y%m%d%H%M%S")
 CC:=$(GCC)
@@ -175,7 +209,7 @@ CXX:=$(GXX)
 PROG_LD=$(GCC_LD_PROG)
 LIB_LD=$(GCC_LD_LIB)
 
-INCLUDE_DIRS:=\
+INCLUDE_DIRS:= -I.\
 	$(foreach ipath,$(INCLUDE_PATHS),-I$(ipath))
 
 LIBDIRS:=\
@@ -210,10 +244,12 @@ help: real-help
 
 debug:	CFLAGS+= -ggdb -DDEBUG
 debug:	CXXFLAGS+= -ggdb -DDEBUG
+debug:	$(SWIG_WRAPPERS)
 debug:	all
 
 release:	CFLAGS+= -O3
 release:	CXXFLAGS+= -O3
+debug:	$(SWIG_WRAPPERS)
 release:	all
 
 # ######################################################################
@@ -235,7 +271,7 @@ real-help:
 
 real-all:	$(OUTDIRS) $(DYNLIB) $(STCLIB) $(BINPROGS)
 
-all:	real-all
+all:	$(SWIG_WRAPPERS) real-all
 	@$(ECHO) "[$(CYAN)Soft linking$(NONE)]    [$(STCLNK_TARGET)]"
 	@ln -f -s $(STCLNK_TARGET) $(STCLNK_NAME)
 	@$(ECHO) "[$(CYAN)Soft linking$(NONE)]    [$(DYNLNK_TARGET)]"
@@ -277,6 +313,7 @@ real-show:
 	@$(ECHO) "$(GREEN)OUTBIN$(NONE)       $(OUTBIN)"
 	@$(ECHO) "$(GREEN)OUTLIB$(NONE)       $(OUTLIB)"
 	@$(ECHO) "$(GREEN)OUTOBS$(NONE)       $(OUTOBS)"
+	@$(ECHO) "$(GREEN)SWIG_OBJECTS$(NONE) $(SWIG_OBJECTS)"
 	@$(ECHO) "$(GREEN)OUTDIRS$(NONE)      "
 	@for X in $(OUTDIRS); do $(ECHO) "              $$X"; done
 	@$(ECHO) "$(GREEN)DEPS$(NONE)      "
@@ -334,6 +371,16 @@ debian-package:
 debug-package:	debug debian-package
 release-package:	release debian-package
 
+swig_prep: swig-input.swig
+	@$(ECHO) "[$(CYAN)SWIG$(NONE)        ]    [ <- ./src/"'*.h]'
+	@mkdir -p wrappers
+
+$(SWIG_WRAPPERS):	swig_prep
+	@mkdir -p wrappers/`echo $@ | cut -f 2 -d -`
+	@swig -o src/swig_$(PROJNAME).c -`echo $@ | cut -f 2 -d -` -outdir wrappers/`echo $@ | cut -f 2 -d -` swig-input.swig
+
+src/swig_$(PROJNAME).c:	$(SWIG_WRAPPERS)
+
 src/%.d: src/%.c
 	@$(ECHO) "[$(RED)Dependency$(NONE)  ]    [$@]"
 	@$(CC) $(CFLAGS) -MM -MF $@ -MT $(OUTOBS)/$*.o $< ||\
@@ -356,17 +403,17 @@ $(BIN_CPPOBS) $(CPPOBS):	$(OUTOBS)/%.o:	src/%.cpp src/%.d
 
 $(OUTBIN)/%.exe:	$(OUTOBS)/%.o $(OBS)
 	@$(ECHO) "[$(GREEN)Linking$(NONE)     ]    [$@]"
-	@$(LD_PROG) $< $(OBS) -o $@ $(LDFLAGS) $(EXTRA_PROG_LDFLAGS) ||\
+	@$(LD_PROG) $< $(OBS) -o $@ $(LDFLAGS) $(REAL_EXTRA_PROG_LDFLAGS) ||\
 		($(ECHO) "$(INV)$(RED)[Link failure]   [$@]$(NONE)" ; exit 127)
 
 $(OUTBIN)/%.elf:	$(OUTOBS)/%.o $(OBS)
 	@$(ECHO) "[$(GREEN)Linking$(NONE)     ]    [$@]"
-	@$(LD_PROG) $< $(OBS) -o $@ $(LDFLAGS) $(EXTRA_PROG_LDFLAGS) ||\
+	@$(LD_PROG) $< $(OBS) -o $@ $(LDFLAGS) $(REAL_EXTRA_PROG_LDFLAGS) ||\
 		($(ECHO) "$(INV)$(RED)[Link failure]   [$@]$(NONE)" ; exit 127)
 
 $(DYNLIB):	$(OBS)
 	@$(ECHO) "[$(GREEN)Linking$(NONE)     ]    [$@]"
-	@$(LD_LIB) -shared $^ -o $@ $(LDFLAGS) $(EXTRA_LIB_LDFLAGS) ||\
+	@$(LD_LIB) -shared $^ -o $@ $(LDFLAGS) $(REAL_EXTRA_LIB_LDFLAGS) ||\
 		($(ECHO) "$(INV)$(RED)[Link failure]   [$@]$(NONE)" ; exit 127)
 
 $(STCLIB):	$(OBS)
@@ -380,10 +427,10 @@ $(OUTDIRS):
 		($(ECHO) "$(INV)$(RED)[mkdir failure]   [$@]$(NONE)" ; exit 127)
 
 clean-release:
-	@rm -rfv release
+	@rm -rfv release wrappers
 
 clean-debug:
-	@rm -rfv debug
+	@rm -rfv debug wrappers
 
 clean-all:	clean-release clean-debug
 	@rm -rfv include
