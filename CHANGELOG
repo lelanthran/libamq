@@ -1,6 +1,7 @@
 # v1.0.1 - ???
 BUGFIXES
 1. Deadlock-avoidance fix from libcmq added.
+2. Updated build process to work on Android and JNI.
 
 FEATURES
 1. Added a sample application to get file-sizes recursively.
