@@ -2,6 +2,7 @@
 BUGFIXES
 1. Deadlock-avoidance fix from libcmq added.
 2. Updated build process to work on Android and JNI.
+3. Updated to work with new API changes in libds.
 
 FEATURES
 1. Added a sample application to get file-sizes recursively.

@@ -19,7 +19,7 @@ void amq_wgroup_del (amq_wgroup_t *group)
    free (group->name);
    size_t nworkers = ds_array_length (group->workers);
    for (size_t i=0; i<nworkers; i++) {
-      char *wname = ds_array_index (group->workers, i);
+      char *wname = ds_array_get (group->workers, i);
       free (wname);
    }
    ds_array_del (group->workers);
@@ -73,10 +73,10 @@ bool amq_wgroup_remove_worker (amq_wgroup_t *group, const char *worker_name)
    size_t nworkers = ds_array_length (group->workers);
 
    for (size_t i=0; i<nworkers; i++) {
-      char *worker = ds_array_index (group->workers, i);
+      char *worker = ds_array_get (group->workers, i);
       if ((strcmp (worker, worker_name))==0) {
          free (worker);
-         ds_array_remove (group->workers, i);
+         ds_array_rm (group->workers, i);
          return true;
       }
    }
@@ -89,7 +89,7 @@ void amq_wgroup_sigset (amq_wgroup_t *group, uint64_t sigmask)
    size_t nworkers = ds_array_length (group->workers);
 
    for (size_t i=0; i<nworkers; i++) {
-      const char *tmp = ds_array_index (group->workers, i);
+      const char *tmp = ds_array_get (group->workers, i);
       amq_worker_sigset (tmp, sigmask);
    }
 }
@@ -99,7 +99,7 @@ void amq_wgroup_sigclr (amq_wgroup_t *group, uint64_t sigmask)
    size_t nworkers = ds_array_length (group->workers);
 
    for (size_t i=0; i<nworkers; i++) {
-      const char *tmp = ds_array_index (group->workers, i);
+      const char *tmp = ds_array_get (group->workers, i);
       amq_worker_sigclr (tmp, sigmask);
    }
 }
@@ -109,7 +109,7 @@ void amq_wgroup_wait (amq_wgroup_t *group)
    size_t nworkers = ds_array_length (group->workers);
 
    for (size_t i=0; i<nworkers; i++) {
-      const char *tmp = ds_array_index (group->workers, i);
+      const char *tmp = ds_array_get (group->workers, i);
       amq_worker_wait (tmp);
    }
 }
