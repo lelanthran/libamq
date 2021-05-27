@@ -471,6 +471,9 @@ bool amq_consumer_create (const char *supply_queue_name,
                           amq_consumer_func_t *worker_func, void *cdata)
 {
    struct queue_t *queue = amq_container_find (g_queue_container, supply_queue_name);
+   if (!queue)
+      return false;
+
    cmq_t *supply_queue = queue->cmq;
    return worker_create (worker_name, supply_queue, WORKER_CONSUMER, worker_func, cdata);
 }
