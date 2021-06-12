@@ -87,6 +87,9 @@ static void print_long_msg (const char **msg)
 #define STRINGIFY_(x)      #x
 #define STRINGIFY(x)       STRINGIFY_(x)
 
+#define ERRFILE         "fstats.err"
+#define OUTFILE         "fstats.csv"
+
 /* ********************************************************************** */
 static volatile sig_atomic_t g_endflag = 0;
 
@@ -95,6 +98,8 @@ static void sigh (int n)
    if (n==SIGINT)
       g_endflag = 1;
 }
+
+static FILE *g_stderr = NULL;
 
 enum amq_worker_result_t errhandler (const struct amq_worker_t *self,
                                      void *mesg, size_t mesg_len,
@@ -105,8 +110,15 @@ enum amq_worker_result_t errhandler (const struct amq_worker_t *self,
    (void)mesg_len;
    (void)cdata;
 
-   fprintf (stderr, "Error %i: [%s]\n", error->code, error->message);
+   if (!g_stderr) {
+      if (!(g_stderr = fopen (ERRFILE, "w"))) {
+         fprintf (stderr, "Failed to open %s: %m.\nAborting execution.\n", ERRFILE);
+         g_endflag = 1;
+      }
+   }
+   fprintf (g_stderr, "Error %i: [%s]\n", error->code, error->message);
    if (error->code == INT_MAX) {
+      fprintf (g_stderr, "error code of %i reached, aborting execution\n", error->code);
       g_endflag = 1;
    }
    amq_error_del (error);
@@ -171,7 +183,7 @@ int main (int argc, char **argv)
       goto errorexit;
    }
 
-   const char *out_fname = getenv ("--output-file") ? getenv ("--output-file") : "fstats.csv";
+   const char *out_fname = getenv ("--output-file") ? getenv ("--output-file") : OUTFILE;
    const char *scan_path = getenv ("--scan-path") ? getenv ("--scan-path") : ".";
 
    printf ("Writing output to [%s]\n", out_fname);

@@ -101,6 +101,11 @@ folder_stats_entry_t *folder_stats_entry_new (const char *name)
 
    ret->f_name = lstrdup (name);
    ret->f_ext = lstrdup (strrchr (name, '.'));
+   if (ret->f_ext) {
+      if (strchr (ret->f_ext, '/') || strlen (ret->f_ext) > 7) {
+         ret->f_ext[0] = 0;
+      }
+   }
 
    if (!ret->f_name || !ret->f_ext) {
       AMQ_ERROR_POST (errno, "Out of memory error\n");
@@ -169,11 +174,11 @@ bool folder_stats_entry_write (folder_stats_entry_t *fs, FILE *fout)
       return true;
    }
 
-   fprintf (fout, "%s,%s,%zu,%c,%" PRIu64 "\n", fs->f_name,
-                                                fs->f_ext,
-                                                fs->f_size,
-                                                fs->f_type,
-                                                fs->f_mtime);
+   fprintf (fout, "\"%s\",\"%s\",%zu,%c,%" PRIu64 "\n", fs->f_name,
+                                                        fs->f_ext,
+                                                        fs->f_size,
+                                                        fs->f_type,
+                                                        fs->f_mtime);
    return true;
 }
 
