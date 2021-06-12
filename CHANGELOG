@@ -1,4 +1,4 @@
-# v1.0.1 - ???
+# v1.0.1 - Sat 12 Jun 2021 08:35:48 SAST
 BUGFIXES
 1. Deadlock-avoidance fix from libcmq added.
 2. Updated build process to work on Android and JNI.
