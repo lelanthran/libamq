@@ -45,7 +45,7 @@
  * must free the error using amq_error_del(). Any worker may post to this queue
  * using the wrapper function amq_error_new().
  */
-#define AMQ_ERROR_POST(code,...)    {\
+#define AMQ_ERROR_POST(code,...)    do {\
    struct amq_error_t *errobj = amq_error_new (__FILE__, __LINE__, code, __VA_ARGS__);\
    if (errobj) {\
       amq_post (AMQ_QUEUE_ERROR, errobj, 0);\
