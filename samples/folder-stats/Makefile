@@ -103,6 +103,14 @@ endif
 # Set the output directories, output filenames
 
 OUTDIR=debug
+ifeq ($(INSTALL_PREFIX),)
+$(warning *********************************************************************)
+$(warning * $$INSTALL_PREFIX not defined!                                      *)
+$(warning * If you get include path or link errors, set the $$INSTALL_PREFIX   *)
+$(warning * and try again.                                                    *)
+$(warning *********************************************************************)
+$(warning Using '$(CURDIR)/..' as $$INSTALL_PREFIX)
+endif
 
 INSTALL_PREFIX?=$(CURDIR)/..
 
@@ -212,6 +220,8 @@ PROG_LD=$(GCC_LD_PROG)
 LIB_LD=$(GCC_LD_LIB)
 
 INCLUDE_DIRS:= -I.\
+	-I./src\
+	-I$(INSTALL_PREFIX)/include/$(TARGET)\
 	$(foreach ipath,$(INCLUDE_PATHS),-I$(ipath))
 
 LIBDIRS:=\
@@ -295,9 +305,9 @@ all:	$(SWIG_WRAPPERS) real-all
 	@mkdir -p $(INSTALL_PREFIX)/include/$(TARGET)
 	@$(ECHO) "[$(CYAN)Copying$(NONE)     ]    [ $(OUTBIN) -> $(INSTALL_PREFIX)/bin/$(TARGET)]"
 	@cp $(OUTBIN)/* $(INSTALL_PREFIX)/bin/$(TARGET)
-	@$(ECHO) "[$(CYAN)Copying$(NONE)     ]    [ $(OUTLIB)-> $(INSTALL_PREFIX)/obs/$(TARGET)]"
+	@$(ECHO) "[$(CYAN)Copying$(NONE)     ]    [ $(OUTLIB)-> $(INSTALL_PREFIX)/lib/$(TARGET)]"
 	@cp $(OUTLIB)/* $(INSTALL_PREFIX)/lib/$(TARGET)
-	@$(ECHO) "[$(CYAN)Copying$(NONE)     ]    [ $(OUTOBS) -> $(INSTALL_PREFIX)/lib/$(TARGET)]"
+	@$(ECHO) "[$(CYAN)Copying$(NONE)     ]    [ $(OUTOBS) -> $(INSTALL_PREFIX)/obs/$(TARGET)]"
 	@cp $(OUTOBS)/* $(INSTALL_PREFIX)/obs/$(TARGET)
 	@$(ECHO) "[$(CYAN)Copying$(NONE)     ]    [ include -> $(INSTALL_PREFIX)/include/$(TARGET)/]"
 	@cp -R include/* $(INSTALL_PREFIX)/include/$(TARGET)
@@ -397,8 +407,12 @@ swig_prep: swig-input.swig
 	@mkdir -p wrappers
 
 $(SWIG_WRAPPERS):	swig_prep
-	@mkdir -p wrappers/`echo $@ | cut -f 2 -d -`
-	@swig -package swig_$(PROJNAME) -o src/swig_$(PROJNAME).c -`echo $@ | cut -f 2 -d -` -outdir wrappers/`echo $@ | cut -f 2 -d -` swig-input.swig
+	@mkdir -p wrappers/`echo $@ | cut -f 2 -d -`/swig_$(PROJNAME)
+	@swig -package swig_$(PROJNAME) \
+		-o src/swig_$(PROJNAME).c \
+		-`echo $@ | cut -f 2 -d -`\
+		-outdir wrappers/`echo $@ | cut -f 2 -d -`/swig_$(PROJNAME)\
+		swig-input.swig
 
 src/swig_$(PROJNAME).c:	$(SWIG_WRAPPERS)
 
